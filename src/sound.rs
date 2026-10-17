@@ -51,9 +51,23 @@ pub struct Clm {
     data: Vec<u8>,
 }
 
-impl Clm {
-    pub fn parse(data: Vec<u8>) -> Result<Self, Error> {
-        let mut r = Reader::new(&data);
+/// Size of the fixed part of a .clm header (version string, wave format, unknown bytes, entry count).
+const CLM_FIXED: usize = 64;
+/// Size of one index entry.
+const CLM_ENTRY: usize = 16;
+
+/// The header of a .clm (wave format and track index) without the sample data, so a player can read one track at a
+/// time from the file (op2.clm is about 250 MB).
+#[derive(Debug, Clone)]
+pub struct ClmIndex {
+    pub format: WaveFormat,
+    pub entries: Vec<ClmEntry>,
+}
+
+impl ClmIndex {
+    /// Parses a header from the start of a file; `file_len` checks that every entry lies inside the file.
+    fn parse(head: &[u8], file_len: usize) -> Result<Self, Error> {
+        let mut r = Reader::new(head);
         let version = r.bytes(32)?;
         if !version.starts_with(b"OP2 Clump File") {
             return Err(Error::Invalid("not a .clm file (missing 'OP2 Clump File' header)".into()));
@@ -67,11 +81,46 @@ impl Clm {
             let name = r.bytes(8)?;
             let name = String::from_utf8_lossy(name.split(|&b| b == 0).next().unwrap_or(&[])).into_owned();
             let entry = ClmEntry { name, offset: r.u32()?, length: r.u32()? };
-            if entry.offset as usize + entry.length as usize > data.len() {
+            if entry.offset as usize + entry.length as usize > file_len {
                 return Err(Error::Invalid(format!("clm entry {} runs past the end of the file", entry.name)));
             }
             entries.push(entry);
         }
+        Ok(Self { format, entries })
+    }
+
+    /// Reads the header of an open .clm file.
+    pub fn read(file: &mut (impl std::io::Read + std::io::Seek)) -> Result<Self, Error> {
+        let io = |e: std::io::Error| Error::Invalid(format!("reading .clm: {e}"));
+        let len = file.seek(std::io::SeekFrom::End(0)).map_err(io)? as usize;
+        file.seek(std::io::SeekFrom::Start(0)).map_err(io)?;
+        let mut head = vec![0; CLM_FIXED.min(len)];
+        file.read_exact(&mut head).map_err(io)?;
+        let count = if head.len() == CLM_FIXED { u32::from_le_bytes(head[60..64].try_into().unwrap()) as usize } else { 0 };
+        let mut rest = vec![0; (count * CLM_ENTRY).min(len.saturating_sub(CLM_FIXED))];
+        file.read_exact(&mut rest).map_err(io)?;
+        head.extend_from_slice(&rest);
+        Self::parse(&head, len)
+    }
+
+    /// An entry by name, ignoring case.
+    pub fn entry(&self, name: &str) -> Option<&ClmEntry> {
+        self.entries.iter().find(|e| e.name.eq_ignore_ascii_case(name))
+    }
+
+    /// Reads an entry's raw PCM samples from the open file.
+    pub fn read_samples(&self, file: &mut (impl std::io::Read + std::io::Seek), entry: &ClmEntry) -> Result<Vec<u8>, Error> {
+        let io = |e: std::io::Error| Error::Invalid(format!("reading .clm track {}: {e}", entry.name));
+        file.seek(std::io::SeekFrom::Start(entry.offset as u64)).map_err(io)?;
+        let mut data = vec![0; entry.length as usize];
+        file.read_exact(&mut data).map_err(io)?;
+        Ok(data)
+    }
+}
+
+impl Clm {
+    pub fn parse(data: Vec<u8>) -> Result<Self, Error> {
+        let ClmIndex { format, entries } = ClmIndex::parse(&data, data.len())?;
         Ok(Self { format, entries, data })
     }
 

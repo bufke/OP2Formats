@@ -91,6 +91,11 @@ impl GameFiles {
         Err(Error::NotFound(name.to_string()))
     }
 
+    /// The loose file `name` resolves to, if any (for files too big to read whole, like `op2.clm`).
+    pub fn loose_path(&self, name: &str) -> Option<&Path> {
+        self.loose.get(&name.to_ascii_lowercase()).map(PathBuf::as_path)
+    }
+
     /// Every distinct `.map` file name available, sorted.
     pub fn map_names(&self) -> Vec<String> {
         let mut names: Vec<String> = self
