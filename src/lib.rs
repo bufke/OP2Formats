@@ -12,6 +12,7 @@ pub mod pe_res;
 pub mod render;
 pub mod sheets;
 pub mod sound;
+pub mod strings;
 #[doc(hidden)]
 pub mod testdata;
 pub mod tile_palette;

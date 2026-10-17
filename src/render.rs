@@ -63,7 +63,7 @@ pub fn tile_group(map: &Map, tilesets: &MapTilesets, group: &TileGroup) -> (Imag
     (Image { width, height, rgba }, missing)
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Image {
     pub width: u32,
     pub height: u32,
