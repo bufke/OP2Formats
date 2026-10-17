@@ -55,8 +55,20 @@ impl GameFiles {
         Ok(Self { root, loose, vols })
     }
 
+    /// Opens `dir`, else [`default_game_dir`](crate::default_game_dir); an error names the folder.
+    pub fn open_game_dir(dir: Option<PathBuf>) -> Result<Self, Error> {
+        let dir = dir.unwrap_or_else(crate::default_game_dir);
+        Self::open(&dir).map_err(|e| Error::Invalid(format!("opening game folder {}: {e}", dir.display())))
+    }
+
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// Reads and parses a map (a name like `cm01.map`, or a path); a parse error names where the map came from.
+    pub fn read_map(&self, name: &str) -> Result<crate::Map, Error> {
+        let (data, source) = self.read(name)?;
+        crate::Map::parse(&data).map_err(|e| Error::Invalid(format!("parsing {source}: {e}")))
     }
 
     /// Reads `name` (a bare file name like `cm01.map`), or a path if it exists on disk.
