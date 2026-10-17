@@ -12,6 +12,8 @@ pub mod pe_res;
 pub mod render;
 pub mod sheets;
 pub mod sound;
+#[doc(hidden)]
+pub mod testdata;
 pub mod tileset;
 pub mod units;
 pub mod vol;

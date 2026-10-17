@@ -4,13 +4,10 @@
 use op2_formats::render::MapTilesets;
 use op2_formats::{GameFiles, Map, Tileset};
 
+use op2_formats::testdata;
+
 fn game() -> Option<GameFiles> {
-    let dir = op2_formats::default_game_dir();
-    if !dir.join("Outpost2.exe").exists() {
-        eprintln!("skipping: no Outpost 2 install at {}", dir.display());
-        return None;
-    }
-    Some(GameFiles::open(dir).expect("open game folder"))
+    testdata::game_files()
 }
 
 #[test]
@@ -174,11 +171,14 @@ fn rules_and_tech_trees_parse() {
     }
 
     // Cross-check against stats the harness read from the running game, when a dump exists.
-    let runs = files.root().join("../../../../harness/oracle/runs");
+    let runs = testdata::oracle_runs_dir();
     let dump = std::fs::read_dir(&runs).ok().and_then(|mut d| d.find_map(|e| {
         std::fs::read_to_string(e.ok()?.path().join("gamedata.json")).ok()
     }));
-    let Some(dump) = dump else { return };
+    let Some(dump) = dump else {
+        testdata::skip(&format!("no gamedata.json in {}", runs.display()));
+        return;
+    };
     let mut checked = 0;
     // Minimal scan of the "unitTypes" objects, avoiding a JSON dependency.
     for obj in dump.split('{').filter(|o| o.contains("\"moveSpeed\"")) {

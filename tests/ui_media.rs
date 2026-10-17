@@ -1,21 +1,11 @@
 //! UI resources and cutscene media against a real game install. Skipped (passing) without one.
 //! The media hashes were taken from output that matched ffmpeg's decoders bit for bit.
 
-use std::path::PathBuf;
-
 use op2_formats::adpcm::MsAdpcm;
 use op2_formats::avi::{Avi, StreamFormat};
 use op2_formats::cinepak::Cinepak;
 use op2_formats::pe_res::{self, AniCursor, Dialog, Dib, PeResources, ResId};
-
-fn game_dir() -> Option<PathBuf> {
-    let dir = op2_formats::default_game_dir();
-    if !dir.join("Outpost2.exe").exists() {
-        eprintln!("skipping: no Outpost 2 install at {}", dir.display());
-        return None;
-    }
-    Some(dir)
-}
+use op2_formats::testdata::game_dir;
 
 fn fnv(data: impl IntoIterator<Item = u8>) -> u64 {
     data.into_iter().fold(0xcbf2_9ce4_8422_2325, |h, b| (h ^ b as u64).wrapping_mul(0x100_0000_01b3))
