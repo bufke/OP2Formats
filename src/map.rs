@@ -339,4 +339,11 @@ impl Map {
     pub fn wraps(&self) -> bool {
         self.width >= 512
     }
+
+    /// Internal (mission/game) tile x minus file tile x: the game pads non-wrapping maps with 32 tiles on the west
+    /// (`GameMap::GetPaddingWidth()`), wrapping maps not at all. Internal y = file y. Verified against the running
+    /// game's whole cell grid on cm01 and newworld (harness/oracle/FINDINGS.md).
+    pub fn x_padding(&self) -> i32 {
+        if self.wraps() { 0 } else { 32 }
+    }
 }
