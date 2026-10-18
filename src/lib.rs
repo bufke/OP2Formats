@@ -9,6 +9,7 @@ pub mod lzh;
 pub mod map;
 mod reader;
 pub mod pe_res;
+pub mod pick;
 pub mod render;
 pub mod sheets;
 pub mod sound;

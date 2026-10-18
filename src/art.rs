@@ -329,6 +329,36 @@ impl Sprites {
         self.compose(a, f, self.animation_bounds(a), tint)
     }
 
+    /// The game's per-pixel click test on a frame (0x404F40, a structure's MouseOver): whether a click at `(x, y)`
+    /// in animation coordinates (map pixel - object pixel + the animation's displacement) lands on a set byte of one
+    /// of the frame's images. Faithful to its quirks: the image's right and bottom edges are inclusive (one byte past
+    /// the row is read), and 1-bit shadow images are read as if they were 8-bit at their recorded stride, so a
+    /// shadow is clickable in a pattern of stripes and dots, and next to it whatever bytes follow it in the file.
+    /// An image whose type has bits 5-9 set (`k`) only counts inside rectangle `k` of the animation's appendix,
+    /// less its displacement. `None` when the animation or frame doesn't exist.
+    pub fn hit(&self, anim: usize, frame: usize, x: i32, y: i32) -> Option<bool> {
+        let a = self.animation(anim)?;
+        let f = a.frames.get(frame)?;
+        let (dx, dy) = a.displacement;
+        Some(f.layers.iter().any(|layer| {
+            let meta = &self.art.images[layer.image as usize];
+            let (ix, iy) = (x - layer.x as i32, y - layer.y as i32);
+            let k = ((meta.kind & 0x3E0) >> 5) as usize;
+            if k != 0 {
+                let Some(r) = a.appendix.get(k - 1) else { return false };
+                let r = r.map(|v| v as i32);
+                if ix < r[0] - dx || ix > r[2] - dx || iy < r[1] - dy || iy > r[3] - dy {
+                    return false;
+                }
+            }
+            if ix < 0 || iy < 0 || ix > meta.width as i32 || iy > meta.height as i32 {
+                return false;
+            }
+            let at = self.pixel_base + meta.offset as usize + iy as usize * meta.scanline_width as usize + ix as usize;
+            self.bmp.get(at).is_some_and(|&b| b != 0)
+        }))
+    }
+
     fn compose(&self, a: &Animation, f: &Frame, bounds: (i32, i32, i32, i32), tint: Tint) -> Result<Sprite, Error> {
         let (x0, y0, x1, y1) = bounds;
         let (width, height) = ((x1 - x0) as u32, (y1 - y0) as u32);
