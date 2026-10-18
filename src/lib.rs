@@ -4,6 +4,7 @@ pub mod adpcm;
 pub mod art;
 pub mod avi;
 pub mod cinepak;
+pub mod exe;
 mod game_files;
 pub mod lzh;
 pub mod map;
