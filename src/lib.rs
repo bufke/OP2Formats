@@ -11,6 +11,8 @@ pub mod inno;
 pub mod install;
 pub mod lzh;
 pub mod map;
+#[cfg(feature = "inno")]
+mod md5;
 mod reader;
 pub mod pe_res;
 pub mod pick;
