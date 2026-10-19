@@ -2,7 +2,7 @@ import subprocess,re,sys,json
 sys.path.insert(0,sys.argv[1]); import pe
 def run(init):
     out=subprocess.run(['objdump','-d','-M','intel','--start-address=%#x'%init,'--stop-address=%#x'%(init+0x1400),pe.EXE],capture_output=True,text=True).stdout
-    stores={}; calls=[]; seen=False; regs={}; unk=[]; this={'ecx'}
+    stores={}; bstores={}; calls=[]; seen=False; regs={}; unk=[]; this={'ecx'}
     for line in out.splitlines()[7:]:
         ins=line.split('\t')[-1].strip()
         if ins.startswith('ret'): seen=True
@@ -14,6 +14,13 @@ def run(init):
             v=m.group(2); off=int(m.group(1),16)
             if v.startswith('0x'): stores[off]=int(v,16)
             elif v in regs: stores[off]=regs[v]
+            else: unk.append(ins)
+            continue
+        m=re.match(r'mov\s+BYTE PTR \[(\w+)\+0x([0-9a-f]+)\],(\w+)$',ins)
+        if m and m.group(1) in this:
+            off=int(m.group(2),16); v=m.group(3)
+            if v.startswith('0x'): bstores[off]=int(v,16)
+            elif v in ('al','bl','cl','dl') and 'e'+v[0]+'x' in regs: bstores[off]=regs['e'+v[0]+'x']&0xff
             else: unk.append(ins)
             continue
         m=re.match(r'mov\s+(e[a-d]x|e[sd]i|ebp),0x([0-9a-f]+)$',ins)
@@ -28,12 +35,12 @@ def run(init):
         if m: calls.append(m.group(1)); regs.clear(); this.discard('ecx'); continue
         m=re.match(r'\w+\s+(e[a-d]x|e[sd]i|ebp)\b',ins)
         if m and not ins.startswith(('test','cmp','push')): regs.pop(m.group(1),None)
-    return stores,calls,unk
+    return stores,bstores,calls,unk
 res={}
 for vt,name,create,gcn,init in pe.vtables():
     if init in (0x446e30,0x4a28e0,0x408960): continue
-    stores,calls,unk=run(init)
-    res[name]=dict(vtable=hex(vt),init=hex(init),stores={hex(k):v for k,v in sorted(stores.items())},unknown=unk)
+    stores,bstores,calls,unk=run(init)
+    res[name]=dict(vtable=hex(vt),init=hex(init),stores={hex(k):v for k,v in sorted(stores.items())},bytes={hex(k):v for k,v in sorted(bstores.items())},unknown=unk)
 json.dump(res,open(sys.argv[2],'w'),indent=1)
 for n,r in res.items():
     s={int(k,16):v for k,v in r['stores'].items()}

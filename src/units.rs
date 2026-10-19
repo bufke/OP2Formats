@@ -33,11 +33,11 @@
 //! vehicle's `this+0x34` object matches a condition involving `+0x58/0x5C/0x60` (likely cargo or
 //! a busy action), rows 2 and 3 when the type's `+0x44C/+0x450` equals the unit's action byte
 //! `+0x21` (e.g. ConVec building, Earthworker/Dozer working). Their exact meaning is unverified.
-//! Building slots, as observed on the Plymouth Agridome (`op2 art unit AGRIDOME --colony ply`):
-//! 0 = construction (scaffold frames ending in the finished building), 1 and 2 = single-frame
-//! finished building (likely enabled/disabled), 3 = destroyed/rubble sequence, 4 = a small
-//! image shared between buildings (unknown), 5 = the operating animation (many frames).
-//! Slots 6+ are mostly unset. Not checked across all buildings.
+//! Building slots (Building::GetSpecialAnimationIndex 0x4836E0, chosen by the slot in MapObject +0x36): 0 =
+//! construction (scaffold frames ending in the finished building, which is how a built structure stands), 1 and 2 =
+//! damaged (30% and 60% of its hit points lost, Building 0x408A20), 3 = destroyed/rubble sequence, 4 = a small image
+//! shared between buildings (unknown), 5..=8 = ambient animations played now and then while the structure works
+//! (Building::DoAmbientAnimation 0x483580; `op2_sim::looks`). Measured: harness/oracle/input/vis_map_objects.json.
 
 use crate::art::{Sprite, Sprites, Tint};
 use crate::Error;
@@ -76,15 +76,22 @@ impl VehicleArt {
 pub struct BuildingArt {
     pub code: &'static str,
     pub init: u32,
-    /// Ten animation slots per colony (see module docs: 0 construction, 1 idle, 5 operating).
+    /// Ten animation slots per colony (see module docs: 0 construction, 1 and 2 damaged, 3 destroyed, 5.. ambient).
     /// `NONE` where unset.
     pub eden: [u16; 10],
     pub plymouth: [u16; 10],
+    /// Column of the ambient animation sequence (type +0x2A6 Eden, +0x2A7 Plymouth; 0 = none), `[eden, plymouth]`.
+    pub ambient: [u8; 2],
 }
 
 impl BuildingArt {
     pub fn slots(&self, plymouth: bool) -> &[u16; 10] {
         if plymouth { &self.plymouth } else { &self.eden }
+    }
+
+    /// The type's column of the ambient animation sequence for a colony (0 = no ambient animation).
+    pub fn ambient(&self, plymouth: bool) -> u8 {
+        self.ambient[plymouth as usize]
     }
 }
 

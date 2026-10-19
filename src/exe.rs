@@ -16,6 +16,15 @@ pub struct Exe {
 const SOUND_FILES: u32 = 0x4E0170;
 /// SoundIDs in that table (the loader stops at 0x4E0560).
 pub const SOUND_COUNT: usize = 0xFC;
+/// Building::DoAmbientAnimation's sequence (0x4E40E0, read at 0x483600/0x48364D): rows of 5 bytes, a delay then four
+/// columns of animation slots (5 + value), between two rows starting with 0xFF.
+const AMBIENT_SEQUENCE: u32 = 0x4E40E0;
+/// The tube/wall graphic for each set of connections (0x4EA778, read by 0x4A1D80 and 0x4A1C40): 16 dwords indexed
+/// by a mask of north 1, south 2, west 4, east 8, each the position in the terrain type's 16-graphic group.
+const TUBE_GRAPHICS: u32 = 0x4EA778;
+
+/// Rows of the ambient animation sequence, including the 0xFF rows at both ends.
+pub const AMBIENT_ROWS: usize = 11;
 
 impl Exe {
     pub fn parse(data: Vec<u8>) -> Result<Self, Error> {
@@ -79,6 +88,38 @@ impl Exe {
             })
             .collect()
     }
+
+    fn bytes(&self, va: u32, len: usize) -> Option<&[u8]> {
+        let o = self.offset(va, len)?;
+        self.data.get(o..o + len)
+    }
+
+    /// The structures' ambient animation sequence (`AMBIENT_SEQUENCE`): `[delay, slot offset per column 1..=4]` rows,
+    /// 0xFF-headed at both ends.
+    pub fn ambient_sequence(&self) -> Result<[[u8; 5]; AMBIENT_ROWS], Error> {
+        let bad = || Error::Invalid("Outpost2.exe: no ambient animation table at 0x4E40E0; not version 1.2?".into());
+        let raw = self.bytes(AMBIENT_SEQUENCE, 5 * AMBIENT_ROWS).ok_or_else(bad)?;
+        let mut rows = [[0u8; 5]; AMBIENT_ROWS];
+        for (row, chunk) in rows.iter_mut().zip(raw.chunks(5)) {
+            row.copy_from_slice(chunk);
+        }
+        let ends = rows[0][0] == 0xFF && rows[AMBIENT_ROWS - 1][0] == 0xFF;
+        let inner = rows[1..AMBIENT_ROWS - 1].iter().all(|r| r[0] < 0x10 && r[1..].iter().all(|&s| s < 5));
+        if ends && inner { Ok(rows) } else { Err(bad()) }
+    }
+
+    /// The tube and wall graphic for each set of connections (`TUBE_GRAPHICS`): position 0..16 in a terrain type's
+    /// group of 16 graphics, by neighbour mask (north 1, south 2, west 4, east 8). Each position appears once.
+    pub fn tube_graphics(&self) -> Result<[u8; 16], Error> {
+        let bad = || Error::Invalid("Outpost2.exe: no tube graphics table at 0x4EA778; not version 1.2?".into());
+        let mut out = [0u8; 16];
+        for (i, o) in out.iter_mut().enumerate() {
+            *o = self.u32(TUBE_GRAPHICS + 4 * i as u32).filter(|&v| v < 16).ok_or_else(bad)? as u8;
+        }
+        let mut seen = [false; 16];
+        out.iter().for_each(|&v| seen[v as usize] = true);
+        if seen.iter().all(|&s| s) { Ok(out) } else { Err(bad()) }
+    }
 }
 
 /// The Savant queue's length of every SoundID's file ([`savant_ms`]; 0 for a file that can't be read).
@@ -111,5 +152,25 @@ mod tests {
         let names = exe.sound_files().expect("sound table");
         assert_eq!(names.len(), SOUND_COUNT);
         assert!(names.iter().all(|n| n.ends_with(".wav")));
+    }
+
+    /// The game's per-neighbour tables (0x4EA578.., the neighbour north of a new tube gains a south connection, and
+    /// so on; 0x4EA678.. lose one when a tube is bulldozed) are all the connection table applied to the mask with
+    /// that bit set or cleared, so only `tube_graphics` is read.
+    #[test]
+    fn neighbour_tables_follow_the_tube_graphics() {
+        let Some(files) = crate::testdata::game_files() else { return };
+        let exe = Exe::open(&files).expect("Outpost2.exe");
+        let graphic = exe.tube_graphics().expect("tube table");
+        let mask_of = |pos: u32| graphic.iter().position(|&g| g as u32 == pos).expect("each position once");
+        for (k, bit) in [2usize, 1, 8, 4].into_iter().enumerate() {
+            for pos in 0..16u32 {
+                let add = exe.u32(0x4EA578 + 0x40 * k as u32 + 4 * pos).unwrap();
+                let del = exe.u32(0x4EA678 + 0x40 * k as u32 + 4 * pos).unwrap();
+                assert_eq!(add, graphic[mask_of(pos) | bit] as u32);
+                assert_eq!(del, graphic[mask_of(pos) & !bit] as u32);
+            }
+        }
+        assert!(exe.ambient_sequence().is_ok());
     }
 }
