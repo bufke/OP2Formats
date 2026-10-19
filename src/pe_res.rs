@@ -204,6 +204,12 @@ impl PeResources {
         Dib::parse(self.bytes(res))
     }
 
+    /// A dialog template by numeric id.
+    pub fn dialog(&self, id: u16) -> Result<Dialog, Error> {
+        let res = self.find(&ResId::Id(RT_DIALOG), &ResId::Id(id)).ok_or_else(|| Error::NotFound(format!("dialog {id}")))?;
+        Dialog::parse(self.bytes(res))
+    }
+
     /// Every string in the string tables, as (id, text), sorted by id.
     pub fn strings(&self) -> Result<Vec<(u32, String)>, Error> {
         let mut out = Vec::new();
