@@ -159,6 +159,46 @@ impl Cinepak {
     }
 }
 
+/// Whether a frame decodes without anything from the frames before it, so playback can seek to it: every strip codes
+/// all its blocks (vector chunk 0x30 or 0x32, no 0x31 skips), the strips cover all `height` rows, and every strip's
+/// codebooks are fully defined in this frame (full codebook chunks, or the strip above's books when frame flag bit 0
+/// is clear, plus any selective updates on top). The strip id doesn't decide it: the game's keyframes are an intra
+/// (0x10) strip with full books followed by 0x11 strips that code every block with selectively updated books. An
+/// empty frame (a repeat) is never one.
+pub fn is_keyframe(data: &[u8], height: u32) -> bool {
+    let (Ok(strips), Some(&flags)) = (be16(data, 8), data.first()) else { return false };
+    let (mut pos, mut rows) = (10, 0);
+    let (mut v4, mut v1) = (false, false);
+    for i in 0..strips.min(MAX_STRIPS) {
+        let (Some(&id), Ok(size), Ok(strip_h)) = (data.get(pos), be24(data, pos + 1), be16(data, pos + 8)) else { return false };
+        if !matches!(id, 0x10 | 0x11) || size < 12 {
+            return false;
+        }
+        if i == 0 || flags & 1 != 0 {
+            (v4, v1) = (false, false); // Starts from this strip index's books of the previous frame.
+        }
+        let end = (pos + size).min(data.len());
+        let mut c = pos + 12;
+        while c + 4 <= end {
+            let Ok(len) = be24(data, c + 1) else { return false };
+            match data[c] {
+                0x20 | 0x24 => v4 = true,
+                0x22 | 0x26 => v1 = true,
+                0x30 | 0x32 => {}
+                0x31 => return false, // inter-coded vectors: some blocks keep the previous picture
+                _ => {}
+            }
+            c += len.max(4);
+        }
+        if !(v4 && v1) {
+            return false;
+        }
+        rows += strip_h;
+        pos = end;
+    }
+    strips > 0 && rows >= height as usize
+}
+
 fn put(rgb: &mut [u8], w: usize, h: usize, x: usize, y: usize, px: [u8; 3]) {
     if x < w && y < h {
         let o = (y * w + x) * 3;
@@ -229,6 +269,13 @@ mod tests {
         let len = 10 + strip.len();
         let mut frame = vec![0, (len >> 16) as u8, (len >> 8) as u8, len as u8, 0, 8, 0, 4, 0, 1];
         frame.extend(strip);
+
+        assert!(is_keyframe(&frame, 4));
+        assert!(!is_keyframe(&frame, 8), "strips must cover the picture");
+        let mut partial = frame.clone();
+        partial[10 + 12] = 0x23; // the V1 book only updated selectively: depends on the previous frame
+        assert!(!is_keyframe(&partial, 4));
+        assert!(!is_keyframe(&[], 4));
 
         let mut dec = Cinepak::new(8, 4);
         dec.decode(&frame).unwrap();
