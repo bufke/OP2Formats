@@ -1,5 +1,6 @@
 //! Finds game files by name the way an OPU install layers them: loose files under `OPU/base`
-//! override `OPU/maps`, which override the game folder, which overrides `.vol` archives.
+//! override `OPU/maps`, which override the game folder, which overrides `.vol` archives. The OPU folder is the game
+//! folder's own, or the one op2-rs installed in its data folder ([`crate::install::opu_dir`]).
 //! Lookups are case-insensitive, matching Windows.
 
 use std::collections::HashMap;
@@ -35,8 +36,10 @@ impl GameFiles {
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, Error> {
         let root = root.into();
         let mut loose = HashMap::new();
-        for dir in ["OPU/base", "OPU/maps"] {
-            index_dir(&root.join(dir), true, &mut loose);
+        if let Some(opu) = crate::install::opu_dir(&root) {
+            for dir in ["base", "maps"] {
+                index_dir(&opu.join(dir), true, &mut loose);
+            }
         }
         index_dir(&root, false, &mut loose);
 

@@ -86,6 +86,55 @@ fn parse_bmp(data: &[u8]) -> Result<Tileset, Error> {
     })
 }
 
+/// A PBMP tileset as the plain BMP OPU's installer writes for it (`OPU/base/tilesets`): an 8-bit top-down DIB with
+/// the palette's red and blue swapped into BMP order (the fourth byte kept) and the pixels unchanged.
+pub fn pbmp_to_bmp(data: &[u8]) -> Result<Vec<u8>, Error> {
+    let mut r = Reader::new(data);
+    r.expect_tag(b"PBMP")?;
+    r.u32()?;
+    r.expect_tag(b"head")?;
+    r.u32()?;
+    r.u32()?;
+    let width = r.u32()?;
+    let height = r.u32()?;
+    let bit_depth = r.u32()?;
+    r.u32()?;
+    if bit_depth != 8 {
+        return Err(Error::Unsupported(format!("PBMP with {bit_depth} bits per pixel")));
+    }
+    r.expect_tag(b"PPAL")?;
+    r.u32()?;
+    r.expect_tag(b"head")?;
+    r.u32()?;
+    r.u32()?;
+    r.expect_tag(b"data")?;
+    r.u32()?;
+    let mut palette = Vec::with_capacity(1024);
+    for _ in 0..256 {
+        let rgbx = r.bytes(4)?;
+        palette.extend_from_slice(&[rgbx[2], rgbx[1], rgbx[0], rgbx[3]]);
+    }
+    r.expect_tag(b"data")?;
+    r.u32()?;
+    let stride = (width as usize).div_ceil(4) * 4;
+    let pixels = r.bytes(stride * height as usize)?;
+    let offset = 14 + 40 + palette.len();
+    let mut out = Vec::with_capacity(offset + pixels.len());
+    out.extend_from_slice(b"BM");
+    out.extend_from_slice(&((offset + pixels.len()) as u32).to_le_bytes());
+    out.extend_from_slice(&[0; 4]);
+    out.extend_from_slice(&(offset as u32).to_le_bytes());
+    out.extend_from_slice(&40u32.to_le_bytes());
+    out.extend_from_slice(&width.to_le_bytes());
+    out.extend_from_slice(&(-(height as i32)).to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&8u16.to_le_bytes());
+    out.extend_from_slice(&[0; 24]);
+    out.extend_from_slice(&palette);
+    out.extend_from_slice(pixels);
+    Ok(out)
+}
+
 fn parse_pbmp(data: &[u8]) -> Result<Tileset, Error> {
     let mut r = Reader::new(data);
     r.expect_tag(b"PBMP")?;
@@ -117,4 +166,45 @@ fn parse_pbmp(data: &[u8]) -> Result<Tileset, Error> {
     let pixel_start = r.pos();
     let stride = TILE_SIZE as usize;
     to_rgba(height, &palette, |y| Reader::at(data, pixel_start + y as usize * stride).bytes(stride))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A one-tile PBMP with a gradient and a palette whose entries all differ.
+    fn pbmp() -> Vec<u8> {
+        let mut d = Vec::new();
+        let tag = |d: &mut Vec<u8>, t: &[u8; 4], v: u32| {
+            d.extend(t);
+            d.extend(v.to_le_bytes());
+        };
+        tag(&mut d, b"PBMP", 0);
+        tag(&mut d, b"head", 20);
+        for v in [2, 32, 32, 8, 0] {
+            d.extend(u32::to_le_bytes(v));
+        }
+        tag(&mut d, b"PPAL", 0);
+        tag(&mut d, b"head", 4);
+        d.extend(1u32.to_le_bytes());
+        tag(&mut d, b"data", 1024);
+        for i in 0..256u32 {
+            d.extend([i as u8, (i * 3) as u8, (255 - i) as u8, 4]);
+        }
+        tag(&mut d, b"data", 1024);
+        d.extend((0..1024u32).map(|i| (i * 7 / 5) as u8));
+        d
+    }
+
+    #[test]
+    fn pbmp_converts_to_the_same_picture_as_a_bmp() {
+        let p = pbmp();
+        let bmp = pbmp_to_bmp(&p).unwrap();
+        assert_eq!(bmp.len(), 14 + 40 + 1024 + 1024);
+        assert_eq!(&bmp[..2], b"BM");
+        assert_eq!(i32::from_le_bytes(bmp[22..26].try_into().unwrap()), -32, "top-down");
+        assert_eq!(&bmp[54 + 4..54 + 8], &[255 - 1, 3, 1, 4], "palette entry 1 in BGR order, fourth byte kept");
+        assert_eq!(Tileset::parse(&bmp).unwrap().rgba, Tileset::parse(&p).unwrap().rgba);
+        assert!(pbmp_to_bmp(&p[..p.len() - 1]).is_err());
+    }
 }

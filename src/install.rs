@@ -57,8 +57,10 @@ pub struct Check {
     /// Optional files not found.
     pub missing_optional: Vec<&'static str>,
     pub release: Release,
-    /// The OPU community update: `Some(version)` when installed (`"1.4.x"`, or `""` when its version isn't readable).
+    /// The OPU community update: `Some(version)` when installed (`"1.4.1"`, or `""` when its version isn't readable).
     pub opu: Option<String>,
+    /// The OPU folder layered over the game ([`opu_dir`]): the game folder's own `OPU`, or op2-rs's install of it.
+    pub opu_dir: Option<PathBuf>,
     /// `Outpost2.exe`'s FileVersion, when readable.
     pub exe_version: Option<String>,
     /// Whether `Outpost2.exe` is byte-identical to GOG's (`None` when it's missing).
@@ -71,26 +73,39 @@ impl Check {
         self.missing.is_empty()
     }
 
-    /// One line describing the release, e.g. "GOG release, OPU update 1.4.x, Outpost2.exe 1.2.0.7 (GOG's)".
-    pub fn describe(&self) -> String {
-        let mut s = match self.release {
-            Release::Gog => "GOG release".to_string(),
-            Release::Cd => "CD release (no GOG files)".to_string(),
+    /// The release in a few words: "GOG 1.2 + OPU 1.4.1" (the target), "GOG 1.2, no OPU", "CD release + OPU 1.4.1".
+    pub fn summary(&self) -> String {
+        let mut s = match (self.release, self.exe_matches_gog) {
+            (Release::Gog, Some(true)) => "GOG 1.2".to_string(),
+            (Release::Gog, _) => "GOG release".to_string(),
+            (Release::Cd, _) => "CD release".to_string(),
         };
         match self.opu.as_deref() {
-            Some("") => s.push_str(", OPU update"),
-            Some(v) => s.push_str(&format!(", OPU update {v}")),
-            None => {}
+            Some("") => s.push_str(" + OPU"),
+            Some(v) => s.push_str(&format!(" + OPU {v}")),
+            None => s.push_str(", no OPU"),
         }
-        match (&self.exe_version, self.exe_matches_gog) {
-            (_, None) => {}
-            (v, Some(gog)) => {
-                s.push_str(", Outpost2.exe");
-                if let Some(v) = v {
-                    s.push_str(&format!(" {v}"));
-                }
-                s.push_str(if gog { " (GOG's)" } else { " (not GOG's build)" });
-            }
+        s
+    }
+
+    /// One line describing the release, e.g. "GOG 1.2 + OPU 1.4.1 (Outpost2.exe 1.2.0.7, GOG's)".
+    pub fn describe(&self) -> String {
+        let mut details = Vec::new();
+        if let Some(gog) = self.exe_matches_gog {
+            let v = self.exe_version.as_deref().map(|v| format!(" {v}")).unwrap_or_default();
+            details.push(format!("Outpost2.exe{v}, {}", if gog { "GOG's" } else { "not GOG's build" }));
+        }
+        if self.release == Release::Cd {
+            details.push("no GOG files".into());
+        }
+        if let Some(d) = &self.opu_dir
+            && !d.starts_with(&self.dir)
+        {
+            details.push(format!("OPU installed by op2-rs in {}", d.display()));
+        }
+        let mut s = self.summary();
+        if !details.is_empty() {
+            s.push_str(&format!(" ({})", details.join("; ")));
         }
         s
     }
@@ -131,11 +146,35 @@ pub fn check(dir: &Path) -> Check {
     let missing = REQUIRED.iter().map(|(n, _)| *n).filter(|n| !has(n)).collect();
     let missing_optional = OPTIONAL.iter().map(|(n, _)| *n).filter(|n| !has(n)).collect();
     let release = if has(&format!("goggame-{GOG_GAME_ID}.info")) { Release::Gog } else { Release::Cd };
-    let opu = opu_version(&names);
+    let opu_dir = opu_dir(dir);
+    let opu = opu_dir.as_deref().and_then(opu_version_of);
     let exe = names.get("outpost2.exe").and_then(|p| fs::read(p).ok());
     let exe_version = exe.as_deref().and_then(exe_file_version);
     let exe_matches_gog = exe.as_deref().map(|d| sha1_smol::Sha1::from(d).digest().to_string() == GOG_EXE_SHA1);
-    Check { dir: dir.to_path_buf(), missing, missing_optional, release, opu, exe_version, exe_matches_gog }
+    Check { dir: dir.to_path_buf(), missing, missing_optional, release, opu, opu_dir, exe_version, exe_matches_gog }
+}
+
+/// Where op2-rs installs OPU when the game folder has none: `<data folder>/op2-rs/OPU`, beside its copy of the game
+/// (docs/game-data.md). It holds what a game folder's `OPU` subfolder would.
+pub fn opu_install_dir(env: &Env) -> Option<PathBuf> {
+    env.op2_data().map(|d| d.join("OPU"))
+}
+
+/// The OPU folder layered over the game in `game` (by [`GameFiles`](crate::GameFiles), mission lookup and the
+/// checks): its own `OPU` subfolder when it has one, as the original game with OPU does; else, for a game folder
+/// (one with `Outpost2.exe`), the OPU op2-rs installed ([`opu_install_dir`]), if complete.
+pub fn opu_dir(game: &Path) -> Option<PathBuf> {
+    opu_dir_with(game, opu_install_dir(&Env::current()).as_deref())
+}
+
+/// [`opu_dir`] with op2-rs's own OPU folder given.
+pub fn opu_dir_with(game: &Path, installed: Option<&Path>) -> Option<PathBuf> {
+    if let Some(own) = resolve_ci(game, Path::new("OPU")).filter(|p| p.is_dir()) {
+        return Some(own);
+    }
+    let installed = installed?;
+    let is_game = crate::find_in_dir(game, "Outpost2.exe").is_ok();
+    (is_game && crate::find_in_dir(installed, "OPUPatch.dll").is_ok()).then(|| installed.to_path_buf())
 }
 
 /// Lowercase file name -> path, for the files directly in `dir`.
@@ -147,15 +186,16 @@ fn dir_index(dir: &Path) -> HashMap<String, PathBuf> {
     out
 }
 
-/// The OPU update's version from its `CHANGES.md`/`README.md` ("1.4.x"), `""` when OPU is there but has no readable
-/// version, `None` without OPU.
-fn opu_version(names: &HashMap<String, PathBuf>) -> Option<String> {
-    let opu = names.get("opu").filter(|p| p.is_dir())?;
+/// The version of the OPU update in folder `opu`, from its `CHANGES.md` ("1.4.1") or `README.md` ("1.4.x"); `""` when
+/// it has OPU's files but no readable version, `None` when it isn't OPU (no `OPUPatch.dll`, nor the game folder's
+/// `op2ext.dll` beside it).
+pub fn opu_version_of(opu: &Path) -> Option<String> {
     let files = dir_index(opu);
-    if !files.contains_key("opupatch.dll") && !names.contains_key("op2ext.dll") {
+    let loader = opu.parent().is_some_and(|game| dir_index(game).contains_key("op2ext.dll"));
+    if !files.contains_key("opupatch.dll") && !loader {
         return None;
     }
-    let version = ["readme.md", "changes.md"]
+    let version = ["changes.md", "readme.md"]
         .iter()
         .filter_map(|n| files.get(*n))
         .filter_map(|p| fs::read_to_string(p).ok())
@@ -209,6 +249,19 @@ pub struct Env {
     pub vars: HashMap<String, OsString>,
     /// Install folders read from the Windows registry (Windows only).
     pub registry: Vec<Candidate>,
+    /// op2-rs's own data folder when set with [`set_data_dir`] (`--data-dir`), instead of `<data_local>/op2-rs`.
+    pub data_override: Option<PathBuf>,
+}
+
+static DATA_DIR: std::sync::RwLock<Option<PathBuf>> = std::sync::RwLock::new(None);
+
+/// The command-line flag the programs accept for [`set_data_dir`].
+pub const DATA_DIR_FLAG: &str = "--data-dir";
+
+/// Uses `dir` as op2-rs's data folder (where it unpacks GOG's installer and installs OPU) for the rest of the
+/// process, instead of the platform's.
+pub fn set_data_dir(dir: PathBuf) {
+    *DATA_DIR.write().unwrap_or_else(|e| e.into_inner()) = Some(dir);
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -240,17 +293,23 @@ impl Env {
             config: dirs::config_dir(),
             vars,
             registry: registry_candidates(),
+            data_override: DATA_DIR.read().unwrap_or_else(|e| e.into_inner()).clone(),
         }
     }
 
     fn var(&self, k: &str) -> Option<PathBuf> {
         self.vars.get(k).filter(|v| !v.is_empty()).map(PathBuf::from)
     }
+
+    /// op2-rs's own data folder: `<data folder>/op2-rs`, or the one given with [`set_data_dir`].
+    pub fn op2_data(&self) -> Option<PathBuf> {
+        self.data_override.clone().or_else(|| self.data_local.as_ref().map(|d| d.join("op2-rs")))
+    }
 }
 
 /// Where op2-rs extracts the GOG installer: `<data folder>/op2-rs/Outpost 2`.
 pub fn extract_dir(env: &Env) -> Option<PathBuf> {
-    env.data_local.as_ref().map(|d| d.join("op2-rs").join("Outpost 2"))
+    env.op2_data().map(|d| d.join("Outpost 2"))
 }
 
 /// Folders inside a Windows drive (or a Wine prefix's `drive_c`) where Outpost 2 is commonly installed.
@@ -703,6 +762,52 @@ pub fn resolve(cli: Option<PathBuf>, saved: Option<PathBuf>) -> Resolved {
     }
 }
 
+/// What to do about OPU ([`crate::opu`]) once there's a usable game folder.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum OpuPlan {
+    /// OPU is there (in the game folder, or installed by op2-rs): use it without asking.
+    Ready,
+    /// Download and install it: asked for (`--fetch-opu`, `fetch_opu` in settings.toml) or
+    /// [`FETCH_BY_DEFAULT`](crate::opu::FETCH_BY_DEFAULT).
+    Fetch,
+    /// Ask the player to get it: the first-run screen, `op2 setup`.
+    Ask,
+    /// Run without it, with a warning: the developer and test paths (`--game-dir`, `$OP2_DIR`, the source tree), so
+    /// tests with a plain game folder keep working.
+    Warn,
+}
+
+/// The [`OpuPlan`] for `check`, a folder from `origin`; `fetch` is the player's request to download OPU.
+pub fn opu_plan(check: &Check, origin: &Origin, fetch: bool) -> OpuPlan {
+    if check.opu.is_some() {
+        OpuPlan::Ready
+    } else if fetch {
+        OpuPlan::Fetch
+    } else if matches!(origin, Origin::CommandLine | Origin::EnvVar | Origin::SourceTree) {
+        OpuPlan::Warn
+    } else if crate::opu::FETCH_BY_DEFAULT {
+        OpuPlan::Fetch
+    } else {
+        OpuPlan::Ask
+    }
+}
+
+/// The text for a game folder without OPU: what OPU is, who made it, where to get it and how to give it to op2-rs.
+pub fn opu_needed_message(check: &Check) -> String {
+    use crate::opu;
+    format!(
+        "{} has no OPU update. op2-rs needs it: it plays Outpost 2 as updated by OPU {}, the free community update.\n\
+         \n{}.\n\
+         Download it from {}, then:  op2 setup --opu \"<{}>\"\n\
+         (or an OPU folder). op2-rs installs it in its own data folder; your game folder isn't changed.\n",
+        check.dir.display(),
+        opu::VERSION,
+        opu::CREDIT,
+        opu::DOWNLOAD_PAGE,
+        opu::PACKAGE_NAME,
+    )
+}
+
 /// For the command-line programs: [`resolve`]s the folder and makes it [`default_game_dir`](crate::default_game_dir)
 /// for the process. An incomplete explicit choice gets a warning on stderr (a tool may need only part of the game);
 /// with nothing found, the error is [`not_found_message`].
@@ -711,6 +816,13 @@ pub fn use_for_tool(cli: Option<PathBuf>, saved: Option<PathBuf>) -> Result<Path
         Resolved::Dir { check, origin } => {
             for p in check.problems() {
                 eprintln!("warning: game folder {} ({origin}): {p}", check.dir.display());
+            }
+            if check.ok() && check.opu.is_none() {
+                eprintln!(
+                    "warning: game folder {} ({origin}) has no OPU {} update, which op2-rs follows; see `op2 setup`",
+                    check.dir.display(),
+                    crate::opu::VERSION
+                );
             }
             crate::set_game_dir(check.dir.clone());
             Ok(check.dir)
@@ -979,7 +1091,53 @@ mod tests {
         fs::write(t.0.join("OPU/README.md"), "# Outpost 2 OPU Unofficial Update 1.4.x Patch Notes\n").unwrap();
         let c = check(&t.0);
         assert_eq!(c.opu.as_deref(), Some("1.4.x"));
-        assert!(c.describe().starts_with("GOG release, OPU update 1.4.x"), "{}", c.describe());
+        assert!(c.describe().starts_with("GOG release + OPU 1.4.x"), "{}", c.describe());
+        fs::write(t.0.join("OPU/CHANGES.md"), "# Outpost 2 OPU Unofficial Update 1.4.1 Changes\n").unwrap();
+        assert_eq!(check(&t.0).summary(), "GOG release + OPU 1.4.1");
+    }
+
+    #[test]
+    fn opu_is_found_in_the_game_folder_or_op2rs_data_folder() {
+        let t = Tmp::new("opu-dirs");
+        let game = t.0.join("game");
+        let ours = t.0.join("data/OPU");
+        fake_install(&game, true);
+        assert_eq!(opu_dir_with(&game, Some(&ours)), None, "no OPU anywhere");
+        // op2-rs's own install counts once complete (OPUPatch.dll is there), and only for a game folder.
+        fs::create_dir_all(&ours).unwrap();
+        assert_eq!(opu_dir_with(&game, Some(&ours)), None);
+        fs::write(ours.join("OPUPatch.dll"), b"").unwrap();
+        assert_eq!(opu_dir_with(&game, Some(&ours)), Some(ours.clone()));
+        assert_eq!(opu_dir_with(&t.0, Some(&ours)), None, "not a game folder");
+        // The game's own OPU wins, in any case.
+        fs::create_dir_all(game.join("opu")).unwrap();
+        assert_eq!(opu_dir_with(&game, Some(&ours)), Some(game.join("opu")));
+    }
+
+    #[test]
+    fn opu_plan_asks_only_players_and_never_blocks_test_paths() {
+        let t = Tmp::new("opu-plan");
+        fake_install(&t.0, true);
+        let plain = check(&t.0);
+        if plain.opu.is_some() {
+            eprintln!("skipping: op2-rs's data folder has an OPU install, which any game folder gets");
+            return;
+        }
+        let found = Origin::Found("GOG default folder".into());
+        assert_eq!(opu_plan(&plain, &found, false), if crate::opu::FETCH_BY_DEFAULT { OpuPlan::Fetch } else { OpuPlan::Ask });
+        assert_eq!(opu_plan(&plain, &Origin::Settings, false), opu_plan(&plain, &found, false));
+        for dev in [Origin::CommandLine, Origin::EnvVar, Origin::SourceTree] {
+            assert_eq!(opu_plan(&plain, &dev, false), OpuPlan::Warn, "{dev}");
+            assert_eq!(opu_plan(&plain, &dev, true), OpuPlan::Fetch, "asked for");
+        }
+        assert_eq!(opu_plan(&plain, &found, true), OpuPlan::Fetch);
+        fs::create_dir_all(t.0.join("OPU")).unwrap();
+        fs::write(t.0.join("OPU/OPUPatch.dll"), b"").unwrap();
+        let with = check(&t.0);
+        for origin in [found, Origin::CommandLine] {
+            assert_eq!(opu_plan(&with, &origin, true), OpuPlan::Ready, "OPU there: no questions, no download");
+        }
+        assert!(opu_needed_message(&plain).contains(crate::opu::DOWNLOAD_PAGE));
     }
 
     #[test]

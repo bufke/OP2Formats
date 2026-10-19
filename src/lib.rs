@@ -13,10 +13,15 @@ pub mod lzh;
 pub mod map;
 #[cfg(feature = "inno")]
 mod md5;
+#[cfg(feature = "opu")]
+pub mod nsis;
+pub mod opu;
 mod reader;
 pub mod pe_res;
 pub mod pick;
 pub mod render;
+#[cfg(feature = "opu")]
+mod sha256;
 pub mod sheets;
 pub mod sound;
 pub mod strings;
