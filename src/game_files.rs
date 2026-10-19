@@ -115,6 +115,17 @@ impl GameFiles {
     }
 }
 
+/// The file `name` in `dir` itself (not OPU's overrides), matched case-insensitively as Windows would: installs mix
+/// cases (`OP2Shell.dll`, `op2shres.dll`, `e01.dll`) and a case-sensitive filesystem keeps them.
+pub fn find_in_dir(dir: &Path, name: &str) -> Result<PathBuf, Error> {
+    let entries = fs::read_dir(dir).map_err(|source| io_err(dir, source))?;
+    entries
+        .flatten()
+        .find(|e| e.file_name().to_string_lossy().eq_ignore_ascii_case(name))
+        .map(|e| e.path())
+        .ok_or_else(|| Error::Invalid(format!("{name} not found in {}", dir.display())))
+}
+
 fn index_dir(dir: &Path, recursive: bool, out: &mut HashMap<String, PathBuf>) {
     for path in read_dir_sorted(dir) {
         if path.is_dir() {

@@ -23,7 +23,7 @@ pub mod units;
 pub mod vol;
 
 pub use art::{ArtFile, Sprite, Sprites, Tint};
-pub use game_files::{GameFiles, Source};
+pub use game_files::{GameFiles, Source, find_in_dir};
 pub use map::{CellType, Map, Speed, Tile};
 pub use tileset::{TILE_SIZE, Tileset};
 pub use vol::VolArchive;
