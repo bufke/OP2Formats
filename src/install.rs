@@ -476,7 +476,8 @@ pub fn wine_path(prefix: &Path, win: &str) -> Option<PathBuf> {
     let root = if drive.eq_ignore_ascii_case("c") {
         prefix.join("drive_c")
     } else {
-        prefix.join("dosdevices").join(format!("{}:", drive.to_ascii_lowercase()))
+        // One join: a lone `d:` would read as a drive on a Windows host and replace the whole path.
+        prefix.join(format!("dosdevices/{}:", drive.to_ascii_lowercase()))
     };
     Some(rest.split('\\').filter(|c| !c.is_empty()).fold(root, |p, c| p.join(c)))
 }
@@ -997,10 +998,10 @@ mod win_registry {
         };
         for view in [KEY_WOW64_32KEY, KEY_WOW64_64KEY] {
             for root in [HKEY_LOCAL_MACHINE, HKEY_CURRENT_USER] {
-                if let Some(k) = Key::open(root, &format!("SOFTWARE\\GOG.com\\Games\\{GOG_GAME_ID}"), view) {
-                    if let Some(p) = k.string("path") {
-                        push(p, "GOG's registry key");
-                    }
+                if let Some(k) = Key::open(root, &format!("SOFTWARE\\GOG.com\\Games\\{GOG_GAME_ID}"), view)
+                    && let Some(p) = k.string("path")
+                {
+                    push(p, "GOG's registry key");
                 }
                 let uninstall = "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall";
                 if let Some(k) = Key::open(root, uninstall, view) {
@@ -1164,7 +1165,8 @@ mod tests {
         fake_install(&home.join(".wine/drive_c/gog games/OUTPOST 2"), true);
         let s = search(&env(home, Os::Linux));
         let (c, chk) = s.best().expect("found");
-        assert!(c.dir.ends_with("gog games/OUTPOST 2"), "{}", c.dir.display());
+        // Canonical: Windows ignores case, so the folder is found by the spelling looked for.
+        assert!(fs::canonicalize(&c.dir).unwrap().ends_with("gog games/OUTPOST 2"), "{}", c.dir.display());
         assert!(c.origin.contains("GOG default folder"), "{}", c.origin);
         assert!(chk.ok());
     }
