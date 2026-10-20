@@ -37,7 +37,7 @@ fn vol_tilesets_match_loose_copies() {
 
     let mut compared = 0;
     for entry in maps_vol.entries().iter().filter(|e| e.name.to_ascii_lowercase().starts_with("well")) {
-        let packed = Tileset::parse(maps_vol.read(entry).unwrap()).unwrap_or_else(|e| panic!("{}: {e}", entry.name));
+        let packed = Tileset::parse(&maps_vol.read(entry).unwrap()).unwrap_or_else(|e| panic!("{}: {e}", entry.name));
         let loose_path = files.root().join("OPU/base/tilesets").join(entry.name.to_ascii_lowercase());
         let Ok(loose_data) = std::fs::read(&loose_path) else { continue };
         let loose = Tileset::parse(&loose_data).unwrap();

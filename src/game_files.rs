@@ -50,9 +50,8 @@ impl GameFiles {
             .collect();
         vol_paths.sort();
         for path in vol_paths {
-            let data = fs::read(&path).map_err(|source| io_err(&path, source))?;
             let name = path.file_name().unwrap().to_string_lossy().into_owned();
-            vols.push((name, VolArchive::parse(data)?));
+            vols.push((name, VolArchive::open(&path)?));
         }
 
         Ok(Self { root, loose, vols })

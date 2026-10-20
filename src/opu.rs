@@ -244,8 +244,7 @@ mod imp {
     fn game_files(game: &Path) -> Result<BTreeMap<String, Vec<u8>>, Error> {
         let open_vol = |name: &str| -> Result<Option<VolArchive>, Error> {
             let Ok(path) = crate::find_in_dir(game, name) else { return Ok(None) };
-            let data = fs::read(&path).map_err(|e| Error::Io { path: path.display().to_string(), source: e })?;
-            Ok(Some(VolArchive::parse(data)?))
+            Ok(Some(VolArchive::open(&path)?))
         };
         let folder_of_map: HashMap<String, &str> = MAP_FOLDERS
             .iter()

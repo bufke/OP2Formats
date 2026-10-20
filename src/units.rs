@@ -39,7 +39,7 @@
 //! shared between buildings (unknown), 5..=8 = ambient animations played now and then while the structure works
 //! (Building::DoAmbientAnimation 0x483580; `op2_sim::looks`). Measured: harness/oracle/input/vis_map_objects.json.
 
-use crate::art::{Sprite, Sprites, Tint};
+use crate::art::{ArtFile, Sprite, Sprites, Tint};
 use crate::Error;
 
 /// Animation index absent from a table.
@@ -193,9 +193,9 @@ pub fn column_rotation(column: usize) -> u8 {
     ((column & 15) * 16) as u8
 }
 
-fn optional1(sprites: &Sprites, anim: usize) -> (i32, i32) {
-    sprites
-        .animation(anim)
+fn optional1(art: &ArtFile, anim: usize) -> (i32, i32) {
+    art.animations
+        .get(anim)
         .and_then(|a| a.frames.first())
         .and_then(|f| f.optional1)
         .map_or((0, 0), |[x, y]| (x as i32, y as i32))
@@ -203,9 +203,10 @@ fn optional1(sprites: &Sprites, anim: usize) -> (i32, i32) {
 
 /// Where a turret's reference point sits relative to the chassis reference point: frame 0's
 /// first optional offset of the chassis animation for the current direction (e.g. Lynx east
-/// (0, -5)). Verified visually: turrets sit centred on the hull in all 16 directions.
-pub fn turret_offset(sprites: &Sprites, chassis_anim: usize) -> (i32, i32) {
-    optional1(sprites, chassis_anim)
+/// (0, -5)). Verified visually: turrets sit centred on the hull in all 16 directions. Only `op2_art.prt` is needed
+/// (the pixels in OP2_ART.BMP aren't).
+pub fn turret_offset(art: &ArtFile, chassis_anim: usize) -> (i32, i32) {
+    optional1(art, chassis_anim)
 }
 
 /// Where shots leave the barrel, relative to the chassis reference point: the chassis offset
@@ -214,8 +215,8 @@ pub fn turret_offset(sprites: &Sprites, chassis_anim: usize) -> (i32, i32) {
 /// 0x4EA7BC/0x4EA7C0 after the weapon's `Select*Graphic`. Tiger turrets also carry a second
 /// pair (the other barrel), which the game uses when the unit has flag 0x4000; see
 /// `Frame::optional2`. Inferred from the code, not yet checked against shots in game.
-pub fn muzzle_offset(sprites: &Sprites, chassis_anim: usize, turret_anim: usize) -> (i32, i32) {
-    let (c, t) = (optional1(sprites, chassis_anim), optional1(sprites, turret_anim));
+pub fn muzzle_offset(art: &ArtFile, chassis_anim: usize, turret_anim: usize) -> (i32, i32) {
+    let (c, t) = (optional1(art, chassis_anim), optional1(art, turret_anim));
     (c.0 + t.0, c.1 + t.1)
 }
 
@@ -266,7 +267,7 @@ pub fn tank_sprite(
     let turret_anim = set.column(plymouth, column);
     let chassis = sprites.frame_rgba_aligned(chassis_anim, 0, tint)?;
     let turret = sprites.frame_rgba_aligned(turret_anim, 0, tint)?;
-    Ok(overlay(&chassis, &turret, turret_offset(sprites, chassis_anim)))
+    Ok(overlay(&chassis, &turret, turret_offset(&sprites.art, chassis_anim)))
 }
 
 /// Draws a chassis frame for a vehicle at a rotation: the sprite plus its hotspot.
