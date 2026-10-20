@@ -1115,9 +1115,10 @@ mod tests {
         fs::write(ours.join("OPUPatch.dll"), b"").unwrap();
         assert_eq!(opu_dir_with(&game, Some(&ours)), Some(ours.clone()));
         assert_eq!(opu_dir_with(&t.0, Some(&ours)), None, "not a game folder");
-        // The game's own OPU wins, in any case.
+        // The game's own OPU wins, in any case (on Windows, whose file names ignore case, it is found as `OPU`).
         fs::create_dir_all(game.join("opu")).unwrap();
-        assert_eq!(opu_dir_with(&game, Some(&ours)), Some(game.join("opu")));
+        let found = opu_dir_with(&game, Some(&ours)).map(|p| p.to_string_lossy().to_lowercase());
+        assert_eq!(found, Some(game.join("opu").to_string_lossy().to_lowercase()));
     }
 
     #[test]
@@ -1154,6 +1155,8 @@ mod tests {
         assert_eq!(first_version("version 2 only"), None);
     }
 
+    // A Linux host's Wine prefixes, with Unix paths: not meaningful on a Windows host.
+    #[cfg(not(windows))]
     #[test]
     fn finds_gog_install_in_a_wine_prefix_with_odd_case() {
         let t = Tmp::new("wine");
@@ -1184,6 +1187,7 @@ mod tests {
         assert!(c.origin.starts_with("registry of Lutris/Heroic games folder"), "{}", c.origin);
     }
 
+    #[cfg(not(windows))]
     #[test]
     fn reg_file_uninstall_entries() {
         let reg = "[Software\\\\Wow6432Node\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Uninstall\\\\1494370738_is1] 1\n\
