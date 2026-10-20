@@ -98,6 +98,8 @@ pub struct Tile {
     pub mapping_index: u16,
     pub lava: bool,
     pub lava_possible: bool,
+    /// Bit 29: the Blight may spread from this tile (the game sets it on a 2x2 block's corner with Blight in it).
+    pub spreading: bool,
     pub microbe: bool,
     pub wall_or_building: bool,
 }
@@ -110,7 +112,7 @@ impl Tile {
             // bits 16..27: unit index (always empty in map files)
             lava: v & (1 << 27) != 0,
             lava_possible: v & (1 << 28) != 0,
-            // bit 29: lava/microbe expansion flag, meaning unknown
+            spreading: v & (1 << 29) != 0,
             microbe: v & (1 << 30) != 0,
             wall_or_building: v & (1 << 31) != 0,
         }
