@@ -141,12 +141,16 @@ impl Check {
 
 /// Checks `dir` for the files op2-rs needs. File names match case-insensitively, as on Windows.
 pub fn check(dir: &Path) -> Check {
+    check_with_opu(dir, opu_dir(dir))
+}
+
+/// [`check`] with the OPU folder given (tests: independent of op2-rs's own installed OPU on this machine).
+fn check_with_opu(dir: &Path, opu_dir: Option<PathBuf>) -> Check {
     let names = dir_index(dir);
     let has = |name: &str| names.contains_key(&name.to_ascii_lowercase());
     let missing = REQUIRED.iter().map(|(n, _)| *n).filter(|n| !has(n)).collect();
     let missing_optional = OPTIONAL.iter().map(|(n, _)| *n).filter(|n| !has(n)).collect();
     let release = if has(&format!("goggame-{GOG_GAME_ID}.info")) { Release::Gog } else { Release::Cd };
-    let opu_dir = opu_dir(dir);
     let opu = opu_dir.as_deref().and_then(opu_version_of);
     let exe = names.get("outpost2.exe").and_then(|p| fs::read(p).ok());
     let exe_version = exe.as_deref().and_then(exe_file_version);
@@ -1083,6 +1087,8 @@ mod tests {
     #[test]
     fn opu_is_detected_with_its_version() {
         let t = Tmp::new("opu");
+        // Only the game folder's own OPU: op2-rs may have installed one in this machine's data folder.
+        let check = |d: &Path| check_with_opu(d, opu_dir_with(d, None));
         fake_install(&t.0, true);
         assert_eq!(check(&t.0).opu, None);
         fs::create_dir_all(t.0.join("OPU")).unwrap();
