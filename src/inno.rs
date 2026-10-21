@@ -27,6 +27,8 @@ use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{self, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Component, Path, PathBuf};
+use std::sync::Mutex;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 use crate::Error;
 use crate::md5::Md5;
@@ -221,54 +223,70 @@ impl Installer {
             v.sort_by_key(|&d| (self.data[d].file_offset, self.data[d].file_size));
         }
 
-        let mut states: Vec<TargetState> = self
-            .targets
-            .iter()
-            .map(|t| TargetState { next_part: 0, md5: (t.parts.len() > 1 && t.md5.is_some()).then(Md5::new), in_order: true })
-            .collect();
-        let mut done = Extracted::default();
-        let mut slices = SliceReader::new(self)?;
-        for (_, entries) in &chunks {
-            let first = &self.data[entries[0]];
-            slices.seek(first.first_slice, first.chunk_offset)?;
-            let mut id = [0u8; 4];
-            slices.read_exact(&mut id).map_err(|e| self.io(e))?;
-            if &id != CHUNK_ID {
-                return Err(Error::Invalid(format!("{}: bad chunk header at {:#x}", self.path.display(), first.chunk_offset)));
+        // Chunks are independent, so they're extracted on several threads. A multi-part file's whole-file MD5 is
+        // computed as its parts are written in order, so chunks sharing a multi-part file form one job, done in file
+        // order by one thread.
+        let mut group: Vec<usize> = (0..chunks.len()).collect();
+        let mut first_chunk: HashMap<usize, usize> = HashMap::new();
+        for (c, (_, entries)) in chunks.iter().enumerate() {
+            for u in entries.iter().flat_map(|d| &uses[d]).filter(|u| u.multi) {
+                let g = *first_chunk.entry(u.target).or_insert(group[c]);
+                let old = group[c];
+                for x in group.iter_mut().filter(|x| **x == old) {
+                    *x = g;
+                }
             }
-            let files = entries
-                .iter()
-                .map(|&d| PendingFile::new(&self.data[d], uses.remove(&d).unwrap_or_default()))
-                .collect::<Vec<_>>();
-            let needed = files.iter().map(|f| f.offset + f.size).max().unwrap_or(0);
-            let mut sink = ChunkSink {
-                pos: 0,
-                files,
-                next: 0,
-                needed,
-                written: done.bytes,
-                total,
-                progress,
-                states: &mut states,
-                error: None,
-            };
-            let compressed = (&mut slices).take(first.chunk_size);
-            let result = if needed == 0 {
-                Ok(()) // only empty files
-            } else {
-                decompress(if first.compressed { self.compression } else { Compression::Stored }, compressed, &mut sink, needed)
-            };
-            if let Some(e) = sink.error.take() {
-                return Err(e);
-            }
-            sink.feed(&[])?;
-            if sink.next < sink.files.len() {
-                let name = sink.files[sink.next].uses.first().map(|u| u.path.display().to_string()).unwrap_or_default();
-                let why = result.err().map(|e| e.to_string()).unwrap_or_else(|| "data ended early".into());
-                return Err(Error::Invalid(format!("{}: decompressing {name}: {why}", self.path.display())));
-            }
-            done.bytes = sink.written;
         }
+        let mut jobs: Vec<(u64, Vec<ChunkJob>)> = Vec::new();
+        let mut job_of: HashMap<usize, usize> = HashMap::new();
+        for (c, (_, entries)) in chunks.iter().enumerate() {
+            let j = *job_of.entry(group[c]).or_insert_with(|| {
+                jobs.push((0, Vec::new()));
+                jobs.len() - 1
+            });
+            let files = entries.iter().map(|&d| PendingFile::new(&self.data[d], uses.remove(&d).unwrap_or_default())).collect();
+            jobs[j].0 += self.data[entries[0]].chunk_size;
+            jobs[j].1.push(ChunkJob { first: entries[0], files });
+        }
+        // Biggest last: workers pop from the end, so the long jobs start first.
+        jobs.sort_by_key(|j| j.0);
+        let queue = Mutex::new(jobs);
+        let states = Mutex::new(
+            self.targets
+                .iter()
+                .map(|t| TargetState { next_part: 0, md5: (t.parts.len() > 1 && t.md5.is_some()).then(Md5::new), in_order: true })
+                .collect::<Vec<_>>(),
+        );
+        let written = AtomicU64::new(0);
+        let failed = AtomicBool::new(false);
+        let threads = std::thread::available_parallelism().map_or(1, |n| n.get()).clamp(1, 4);
+        let (tx, rx) = std::sync::mpsc::channel::<()>();
+        let results: Vec<Result<(), Error>> = std::thread::scope(|s| {
+            let workers: Vec<_> = (0..threads)
+                .map(|_| {
+                    let tx = tx.clone();
+                    let (queue, states, written, failed) = (&queue, &states, &written, &failed);
+                    s.spawn(move || {
+                        let r = self.extract_jobs(queue, states, written, failed);
+                        if r.is_err() {
+                            failed.store(true, Ordering::Relaxed);
+                        }
+                        drop(tx);
+                        r
+                    })
+                })
+                .collect();
+            drop(tx);
+            // Progress from this thread (the callback needn't be Send) until every worker is done.
+            while let Err(std::sync::mpsc::RecvTimeoutError::Timeout) = rx.recv_timeout(std::time::Duration::from_millis(50)) {
+                progress(written.load(Ordering::Relaxed), total);
+            }
+            workers.into_iter().map(|w| w.join().unwrap_or_else(|p| std::panic::resume_unwind(p))).collect()
+        });
+        results.into_iter().collect::<Result<Vec<()>, Error>>()?;
+        let mut done = Extracted { bytes: written.load(Ordering::Relaxed), ..Extracted::default() };
+        progress(done.bytes, total);
+        let states = states.into_inner().unwrap_or_else(|e| e.into_inner());
         // Multi-part files as a whole (a one-part file's MD5 is its part's, checked already).
         for (t, s) in self.targets.iter().zip(states) {
             let Some(want) = t.md5.filter(|_| t.parts.len() > 1) else { continue };
@@ -289,6 +307,55 @@ impl Installer {
     fn io(&self, e: io::Error) -> Error {
         io_err(&self.path, e)
     }
+
+    /// A worker of [`Installer::extract`]: takes jobs from `queue` until it's empty or another worker failed.
+    fn extract_jobs(&self, queue: &Mutex<Vec<(u64, Vec<ChunkJob>)>>, states: &Mutex<Vec<TargetState>>, written: &AtomicU64, failed: &AtomicBool) -> Result<(), Error> {
+        let mut slices = SliceReader::new(self)?;
+        loop {
+            let Some((_, job)) = queue.lock().unwrap_or_else(|e| e.into_inner()).pop() else { return Ok(()) };
+            for chunk in job {
+                if failed.load(Ordering::Relaxed) {
+                    return Ok(());
+                }
+                self.extract_chunk(&mut slices, chunk, states, written)?;
+            }
+        }
+    }
+
+    /// Decompresses one chunk into its files.
+    fn extract_chunk(&self, slices: &mut SliceReader, chunk: ChunkJob, states: &Mutex<Vec<TargetState>>, written: &AtomicU64) -> Result<(), Error> {
+        let first = &self.data[chunk.first];
+        slices.seek(first.first_slice, first.chunk_offset)?;
+        let mut id = [0u8; 4];
+        slices.read_exact(&mut id).map_err(|e| self.io(e))?;
+        if &id != CHUNK_ID {
+            return Err(Error::Invalid(format!("{}: bad chunk header at {:#x}", self.path.display(), first.chunk_offset)));
+        }
+        let needed = chunk.files.iter().map(|f| f.offset + f.size).max().unwrap_or(0);
+        let mut sink = ChunkSink { pos: 0, files: chunk.files, next: 0, needed, written, states, error: None };
+        let compressed = slices.take(first.chunk_size);
+        let result = if needed == 0 {
+            Ok(()) // only empty files
+        } else {
+            decompress(if first.compressed { self.compression } else { Compression::Stored }, compressed, &mut sink, needed)
+        };
+        if let Some(e) = sink.error.take() {
+            return Err(e);
+        }
+        sink.feed(&[])?;
+        if sink.next < sink.files.len() {
+            let name = sink.files[sink.next].uses.first().map(|u| u.path.display().to_string()).unwrap_or_default();
+            let why = result.err().map(|e| e.to_string()).unwrap_or_else(|| "data ended early".into());
+            return Err(Error::Invalid(format!("{}: decompressing {name}: {why}", self.path.display())));
+        }
+        Ok(())
+    }
+}
+
+/// One chunk to extract: its first data entry (where the chunk is) and its files, in offset order.
+struct ChunkJob {
+    first: usize,
+    files: Vec<PendingFile>,
 }
 
 /// `{app}\sub\file` as a safe relative path (`sub/file`); `None` for other destinations or anything that could
@@ -921,7 +988,7 @@ impl PendingFile {
         }
     }
 
-    fn open(&mut self, states: &mut [TargetState]) -> Result<(), Error> {
+    fn open(&mut self, states: &Mutex<Vec<TargetState>>) -> Result<(), Error> {
         for u in &self.uses {
             let file = if u.multi {
                 let mut f = fs::OpenOptions::new().write(true).open(&u.path).map_err(|e| io_err(&u.path, e))?;
@@ -930,9 +997,11 @@ impl PendingFile {
             } else {
                 create(&u.path)?
             };
-            let s = &mut states[u.target];
-            let whole_md5 = if s.in_order && s.next_part == u.part { s.md5.take() } else { None };
-            s.in_order &= s.next_part == u.part;
+            let whole_md5 = {
+                let s = &mut states.lock().unwrap_or_else(|e| e.into_inner())[u.target];
+                s.in_order &= s.next_part == u.part;
+                if s.in_order { s.md5.take() } else { None }
+            };
             let out = OutFile {
                 w: io::BufWriter::with_capacity(1 << 16, file),
                 path: u.path.clone(),
@@ -962,7 +1031,7 @@ impl PendingFile {
         Ok(self.writers.iter().map(|w| w.out().written).sum::<u64>() - before)
     }
 
-    fn write(&mut self, data: &[u8], states: &mut [TargetState]) -> Result<u64, Error> {
+    fn write(&mut self, data: &[u8], states: &Mutex<Vec<TargetState>>) -> Result<u64, Error> {
         self.got += data.len() as u64;
         if self.filtered {
             self.buf.extend_from_slice(data);
@@ -976,7 +1045,7 @@ impl PendingFile {
     }
 
     /// Completes and checks every use; returns the bytes this added to the output files.
-    fn finish(&mut self, states: &mut [TargetState]) -> Result<u64, Error> {
+    fn finish(&mut self, states: &Mutex<Vec<TargetState>>) -> Result<u64, Error> {
         if self.writers.is_empty() {
             self.open(states)?;
         }
@@ -1008,7 +1077,7 @@ impl PendingFile {
                 let _ = fs::remove_file(&u.path);
                 return Err(mismatch(&u.path));
             }
-            let s = &mut states[u.target];
+            let s = &mut states.lock().unwrap_or_else(|e| e.into_inner())[u.target];
             if s.in_order && s.next_part == u.part {
                 s.md5 = out.whole_md5.take();
                 s.next_part += 1;
@@ -1051,11 +1120,9 @@ struct ChunkSink<'a> {
     files: Vec<PendingFile>,
     next: usize,
     needed: u64,
-    /// Bytes written to output files so far, of `total`.
-    written: u64,
-    total: u64,
-    progress: &'a mut dyn FnMut(u64, u64),
-    states: &'a mut [TargetState],
+    /// Bytes written to output files so far, by every worker.
+    written: &'a AtomicU64,
+    states: &'a Mutex<Vec<TargetState>>,
     error: Option<Error>,
 }
 
@@ -1067,7 +1134,7 @@ impl ChunkSink<'_> {
                 if f.size != 0 {
                     return Err(Error::Invalid("overlapping files in an installer chunk".into()));
                 }
-                self.written += f.finish(self.states)?;
+                self.written.fetch_add(f.finish(self.states)?, Ordering::Relaxed);
                 self.next += 1;
                 continue;
             }
@@ -1078,20 +1145,19 @@ impl ChunkSink<'_> {
                 continue;
             }
             let take = data.len().min((f.offset + f.size - self.pos) as usize);
-            self.written += f.write(&data[..take], self.states)?;
+            self.written.fetch_add(f.write(&data[..take], self.states)?, Ordering::Relaxed);
             self.pos += take as u64;
             data = &data[take..];
             if f.got == f.size {
-                self.written += f.finish(self.states)?;
+                self.written.fetch_add(f.finish(self.states)?, Ordering::Relaxed);
                 self.next += 1;
             }
         }
         // Zero-length files at the current position.
         while self.next < self.files.len() && self.files[self.next].size == 0 && self.files[self.next].offset <= self.pos {
-            self.written += self.files[self.next].finish(self.states)?;
+            self.written.fetch_add(self.files[self.next].finish(self.states)?, Ordering::Relaxed);
             self.next += 1;
         }
-        (self.progress)(self.written, self.total);
         Ok(())
     }
 }
