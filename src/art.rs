@@ -359,6 +359,9 @@ impl Sprites {
         }))
     }
 
+    /// An image whose type has bits 5-9 set (`k`) is drawn only inside rectangle `k` of the animation's appendix, in
+    /// frame-local pixels, edges included (the sprite draw 0x403F20 narrows the surface's clip to it): how a Cargo
+    /// Truck sinks into a Smelter's dock pit and a ConVec into a Structure Factory's.
     fn compose(&self, a: &Animation, f: &Frame, bounds: (i32, i32, i32, i32), tint: Tint) -> Result<Sprite, Error> {
         let (x0, y0, x1, y1) = bounds;
         let (width, height) = ((x1 - x0) as u32, (y1 - y0) as u32);
@@ -368,9 +371,17 @@ impl Sprites {
             let palette = self.palette(&meta, tint);
             let indices = self.image_indices(layer.image as usize)?;
             let (ox, oy) = (layer.x as i32 - x0, layer.y as i32 - y0);
+            let k = ((meta.kind & 0x3E0) >> 5) as usize;
+            let clip = k.checked_sub(1).and_then(|k| a.appendix.get(k)).map(|r| r.map(|v| v as i32));
             for (i, &index) in indices.iter().enumerate() {
                 let src = pixel(&meta, &palette, index);
                 if src[3] == 0 {
+                    continue;
+                }
+                let (lx, ly) = (layer.x as i32 + (i as u32 % meta.width) as i32, layer.y as i32 + (i as u32 / meta.width) as i32);
+                if let Some(r) = clip
+                    && (lx < r[0] || lx > r[2] || ly < r[1] || ly > r[3])
+                {
                     continue;
                 }
                 let (x, y) = (ox + (i as u32 % meta.width) as i32, oy + (i as u32 / meta.width) as i32);
@@ -493,5 +504,30 @@ mod tests {
         assert_eq!(px(4, 1), &[7, 10, 20, 255]); // 8-bit pixel over shadow row 0
         assert_eq!(px(3, 1), &SHADOW_RGBA); // index 0 is transparent: the shadow shows through
         assert_eq!(px(5, 2), &[3, 10, 20, 255]);
+    }
+
+    /// The Cargo Truck unloading at a Smelter (animation 497, harness eco_mining): images with a clip index in their
+    /// type (bits 5-9) stay inside the animation's appendix rectangle, so the truck sinks into the dock pit instead
+    /// of showing below it.
+    #[test]
+    fn clipped_layers_stay_in_the_dock_pit() {
+        let Some(files) = crate::testdata::game_files() else { return };
+        let sprites = Sprites::load(&files).unwrap();
+        let a = sprites.animation(497).unwrap();
+        let r = a.appendix[1];
+        let s = sprites.frame_rgba_aligned(497, 110, Tint::Stored).unwrap();
+        let (x0, y0) = (a.displacement.0 - s.hotspot.0, a.displacement.1 - s.hotspot.1);
+        // The truck (image 254, 12x33 at (21, 30)) would reach y 62; nothing of it is drawn below the pit.
+        // (The pit images themselves end at y 40.)
+        for y in (r[3] as i32 + 1).max(40)..30 + 33 {
+            for x in 21..33 {
+                let (cx, cy) = (x - x0, y - y0);
+                if cx < 0 || cy < 0 || cx >= s.image.width as i32 || cy >= s.image.height as i32 {
+                    continue;
+                }
+                let at = ((cy as u32 * s.image.width + cx as u32) * 4) as usize;
+                assert!(s.image.rgba[at + 3] < 255, "opaque truck pixel at frame-local ({x}, {y})");
+            }
+        }
     }
 }
