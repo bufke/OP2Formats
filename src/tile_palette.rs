@@ -32,11 +32,11 @@ impl TilePalette {
                 let index = map.tile(x, y).mapping_index as usize;
                 let Some(slot @ None) = mapping_layer.get_mut(index) else { continue };
                 let m = &map.mappings[index];
-                let Some(rgba) = tilesets.get(m.tileset).and_then(|t| t.tile_rgba(m.graphic.into())) else {
+                let Some(rgba) = tilesets.get(m.tileset).and_then(|t| t.tile(m.graphic.into())) else {
                     continue;
                 };
                 *slot = Some(*graphic_layer.entry((m.tileset, m.graphic)).or_insert_with(|| {
-                    pixels.extend_from_slice(rgba);
+                    rgba.extend_rgba(&mut pixels);
                     (pixels.len() / LAYER_BYTES - 1) as u32
                 }));
             }
@@ -156,7 +156,7 @@ mod tests {
             for y in 0..map.height {
                 for x in 0..map.width {
                     let expected = tilesets.tile_pixels(&map, x, y).unwrap();
-                    assert_eq!(palette.layers(palette.layer(map.tile(x, y)), 1), expected, "{name} ({x},{y})");
+                    assert_eq!(palette.layers(palette.layer(map.tile(x, y)), 1), expected.rgba(), "{name} ({x},{y})");
                 }
             }
         }

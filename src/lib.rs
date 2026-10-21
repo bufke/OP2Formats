@@ -36,7 +36,7 @@ pub mod vol;
 pub use art::{ArtFile, Sprite, Sprites, Tint};
 pub use game_files::{GameFiles, Source, find_in_dir};
 pub use map::{CellType, Map, Speed, Tile};
-pub use tileset::{TILE_SIZE, Tileset};
+pub use tileset::{TILE_RGBA_BYTES, TILE_SIZE, TilePixels, Tileset};
 pub use vol::VolArchive;
 
 static GAME_DIR: std::sync::RwLock<Option<std::path::PathBuf>> = std::sync::RwLock::new(None);

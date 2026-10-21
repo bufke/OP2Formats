@@ -1,7 +1,7 @@
 //! CPU composition of a map into an RGBA image, for previews and headless checks.
 
 use crate::map::TileGroup;
-use crate::{Error, GameFiles, Map, TILE_SIZE, Tileset};
+use crate::{Error, GameFiles, Map, TILE_SIZE, TilePixels, Tileset};
 
 /// Shown for tiles whose mapping or tileset can't be resolved.
 const MISSING: [u8; 4] = [255, 0, 255, 255];
@@ -31,10 +31,10 @@ impl MapTilesets {
         self.sets.get(index as usize)?.as_ref()?.as_ref().ok()
     }
 
-    /// RGBA pixels for the tile at map position (x, y), first animation frame.
-    pub fn tile_pixels(&self, map: &Map, x: u32, y: u32) -> Option<&[u8]> {
+    /// The pixels of the tile at map position (x, y), first animation frame.
+    pub fn tile_pixels(&self, map: &Map, x: u32, y: u32) -> Option<TilePixels<'_>> {
         let mapping = map.mapping(map.tile(x, y))?;
-        self.get(mapping.tileset)?.tile_rgba(mapping.graphic as u32)
+        self.get(mapping.tileset)?.tile(mapping.graphic as u32)
     }
 }
 
@@ -50,12 +50,12 @@ pub fn tile_group(map: &Map, tilesets: &MapTilesets, group: &TileGroup) -> (Imag
         let pixels = map
             .mappings
             .get(index as usize)
-            .and_then(|m| tilesets.get(m.tileset)?.tile_rgba(m.graphic as u32));
+            .and_then(|m| tilesets.get(m.tileset)?.tile(m.graphic as u32));
         missing += pixels.is_none() as usize;
         for row in 0..TILE_SIZE {
             let dst = (((cy * TILE_SIZE + row) * width + cx * TILE_SIZE) * 4) as usize;
             match pixels {
-                Some(p) => rgba[dst..dst + row_bytes].copy_from_slice(&p[row as usize * row_bytes..][..row_bytes]),
+                Some(p) => p.write_row(row, &mut rgba[dst..dst + row_bytes]),
                 None => rgba[dst..dst + row_bytes].as_chunks_mut::<4>().0.fill(MISSING),
             }
         }
@@ -95,13 +95,13 @@ pub fn compose(map: &Map, tilesets: &MapTilesets, px: u32) -> Image {
     Image { width, height, rgba }
 }
 
-fn average(tile: &[u8], x0: u32, y0: u32, block: u32) -> [u8; 4] {
+fn average(tile: TilePixels, x0: u32, y0: u32, block: u32) -> [u8; 4] {
     let mut sum = [0u32; 3];
     for y in y0..y0 + block {
         for x in x0..x0 + block {
-            let i = ((y * TILE_SIZE + x) * 4) as usize;
+            let p = tile.pixel(x, y);
             for c in 0..3 {
-                sum[c] += tile[i + c] as u32;
+                sum[c] += p[c] as u32;
             }
         }
     }

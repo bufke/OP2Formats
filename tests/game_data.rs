@@ -42,7 +42,7 @@ fn vol_tilesets_match_loose_copies() {
         let Ok(loose_data) = std::fs::read(&loose_path) else { continue };
         let loose = Tileset::parse(&loose_data).unwrap();
         assert_eq!(packed.tile_count, loose.tile_count, "{}", entry.name);
-        assert!(packed.rgba == loose.rgba, "{}: pixels differ between vol and loose copy", entry.name);
+        assert!(packed.rgba() == loose.rgba(), "{}: pixels differ between vol and loose copy", entry.name);
         compared += 1;
     }
     assert!(compared > 5, "compared only {compared} tilesets");

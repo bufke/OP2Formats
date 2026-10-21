@@ -7,11 +7,50 @@ use crate::reader::Reader;
 
 pub const TILE_SIZE: u32 = 32;
 
-/// Decoded tileset, as RGBA8 pixels, `TILE_SIZE` wide and `tile_count * TILE_SIZE` tall.
+/// Decoded tileset, `TILE_SIZE` wide and `tile_count * TILE_SIZE` tall: palette indices and the palette, a quarter
+/// of the memory RGBA would take (e01's tilesets: ~2 MiB instead of ~8). [`TilePixels`] gives RGBA.
 #[derive(Debug, Clone)]
 pub struct Tileset {
     pub tile_count: u32,
-    pub rgba: Vec<u8>,
+    indices: Vec<u8>,
+    palette: Box<[[u8; 4]; 256]>,
+}
+
+/// Bytes of one tile as RGBA.
+pub const TILE_RGBA_BYTES: usize = (TILE_SIZE * TILE_SIZE * 4) as usize;
+
+/// One tile of a [`Tileset`]: its row-major palette indices and the palette.
+#[derive(Debug, Clone, Copy)]
+pub struct TilePixels<'a> {
+    indices: &'a [u8],
+    palette: &'a [[u8; 4]; 256],
+}
+
+impl TilePixels<'_> {
+    /// The RGBA colour (alpha 255) at (x, y) in the tile.
+    pub fn pixel(&self, x: u32, y: u32) -> [u8; 4] {
+        self.palette[self.indices[(y * TILE_SIZE + x) as usize] as usize]
+    }
+
+    /// Row `y` as RGBA into `dst` (`TILE_SIZE * 4` bytes).
+    pub fn write_row(&self, y: u32, dst: &mut [u8]) {
+        let row = &self.indices[(y * TILE_SIZE) as usize..][..TILE_SIZE as usize];
+        for (d, &i) in dst.as_chunks_mut::<4>().0.iter_mut().zip(row) {
+            *d = self.palette[i as usize];
+        }
+    }
+
+    /// Appends the tile's RGBA pixels, row-major, [`TILE_RGBA_BYTES`] bytes.
+    pub fn extend_rgba(&self, out: &mut Vec<u8>) {
+        out.extend(self.indices.iter().flat_map(|&i| self.palette[i as usize]));
+    }
+
+    /// The tile's RGBA pixels, row-major, [`TILE_RGBA_BYTES`] bytes.
+    pub fn rgba(&self) -> Vec<u8> {
+        let mut v = Vec::with_capacity(TILE_RGBA_BYTES);
+        self.extend_rgba(&mut v);
+        v
+    }
 }
 
 impl Tileset {
@@ -23,11 +62,16 @@ impl Tileset {
         }
     }
 
-    /// RGBA pixels of one tile, row-major, `TILE_SIZE * TILE_SIZE * 4` bytes.
-    pub fn tile_rgba(&self, index: u32) -> Option<&[u8]> {
-        let len = (TILE_SIZE * TILE_SIZE * 4) as usize;
+    /// One tile's pixels.
+    pub fn tile(&self, index: u32) -> Option<TilePixels<'_>> {
+        let len = (TILE_SIZE * TILE_SIZE) as usize;
         let start = index as usize * len;
-        self.rgba.get(start..start + len)
+        Some(TilePixels { indices: self.indices.get(start..start + len)?, palette: &self.palette })
+    }
+
+    /// The whole strip as RGBA, row-major.
+    pub fn rgba(&self) -> Vec<u8> {
+        self.indices.iter().flat_map(|&i| self.palette[i as usize]).collect()
     }
 }
 
@@ -40,15 +84,12 @@ fn check_dims(width: i64, height: i64, bit_depth: u32) -> Result<u32, Error> {
     Ok(height as u32)
 }
 
-fn to_rgba<'a>(height: u32, palette: &[[u8; 3]; 256], row: impl Fn(u32) -> Result<&'a [u8], Error>) -> Result<Tileset, Error> {
-    let mut rgba = Vec::with_capacity((TILE_SIZE * height * 4) as usize);
+fn decode<'a>(height: u32, palette: &[[u8; 3]; 256], row: impl Fn(u32) -> Result<&'a [u8], Error>) -> Result<Tileset, Error> {
+    let mut indices = Vec::with_capacity((TILE_SIZE * height) as usize);
     for y in 0..height {
-        for &index in &row(y)?[..TILE_SIZE as usize] {
-            let [r, g, b] = palette[index as usize];
-            rgba.extend_from_slice(&[r, g, b, 255]);
-        }
+        indices.extend_from_slice(&row(y)?[..TILE_SIZE as usize]);
     }
-    Ok(Tileset { tile_count: height / TILE_SIZE, rgba })
+    Ok(Tileset { tile_count: height / TILE_SIZE, indices, palette: Box::new(palette.map(|[r, g, b]| [r, g, b, 255])) })
 }
 
 fn parse_bmp(data: &[u8]) -> Result<Tileset, Error> {
@@ -80,7 +121,7 @@ fn parse_bmp(data: &[u8]) -> Result<Tileset, Error> {
     // Rows are padded to 4 bytes; 32px at 8bpp needs none. Positive height means bottom-up.
     let stride = TILE_SIZE as usize;
     let bottom_up = raw_height > 0;
-    to_rgba(height, &palette, |y| {
+    decode(height, &palette, |y| {
         let src_row = if bottom_up { height - 1 - y } else { y } as usize;
         Reader::at(data, pixel_offset + src_row * stride).bytes(stride)
     })
@@ -165,7 +206,7 @@ fn parse_pbmp(data: &[u8]) -> Result<Tileset, Error> {
     r.u32()?;
     let pixel_start = r.pos();
     let stride = TILE_SIZE as usize;
-    to_rgba(height, &palette, |y| Reader::at(data, pixel_start + y as usize * stride).bytes(stride))
+    decode(height, &palette, |y| Reader::at(data, pixel_start + y as usize * stride).bytes(stride))
 }
 
 #[cfg(test)]
@@ -204,7 +245,7 @@ mod tests {
         assert_eq!(&bmp[..2], b"BM");
         assert_eq!(i32::from_le_bytes(bmp[22..26].try_into().unwrap()), -32, "top-down");
         assert_eq!(&bmp[54 + 4..54 + 8], &[255 - 1, 3, 1, 4], "palette entry 1 in BGR order, fourth byte kept");
-        assert_eq!(Tileset::parse(&bmp).unwrap().rgba, Tileset::parse(&p).unwrap().rgba);
+        assert_eq!(Tileset::parse(&bmp).unwrap().rgba(), Tileset::parse(&p).unwrap().rgba());
         assert!(pbmp_to_bmp(&p[..p.len() - 1]).is_err());
     }
 }
