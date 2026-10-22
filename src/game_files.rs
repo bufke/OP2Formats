@@ -37,8 +37,11 @@ impl GameFiles {
         let root = root.into();
         let mut loose = HashMap::new();
         if let Some(opu) = crate::install::opu_dir(&root) {
+            // Any case: an install copied from Windows may have `BASE` or `Maps` on a case-sensitive filesystem.
             for dir in ["base", "maps"] {
-                index_dir(&opu.join(dir), true, &mut loose);
+                if let Some(d) = crate::install::resolve_ci(&opu, Path::new(dir)) {
+                    index_dir(&d, true, &mut loose);
+                }
             }
         }
         index_dir(&root, false, &mut loose);
@@ -149,4 +152,28 @@ fn read_dir_sorted(dir: &Path) -> Vec<PathBuf> {
 
 fn io_err(path: &Path, source: std::io::Error) -> Error {
     Error::Io { path: path.display().to_string(), source }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// OPU's `base` and `maps` are found in any case (an install copied from Windows onto a case-sensitive
+    /// filesystem), and `base` still overrides `maps`, which overrides the game folder.
+    #[test]
+    fn opu_folders_in_any_case() {
+        let root = std::env::temp_dir().join(format!("op2-game-files-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        fs::create_dir_all(root.join("OPU/BASE/Sub")).unwrap();
+        fs::create_dir_all(root.join("OPU/Maps")).unwrap();
+        fs::write(root.join("OPU/BASE/Sub/Language.INI"), b"base").unwrap();
+        fs::write(root.join("OPU/Maps/language.ini"), b"maps").unwrap();
+        fs::write(root.join("OPU/Maps/X.MAP"), b"map").unwrap();
+        fs::write(root.join("x.map"), b"game").unwrap();
+        let files = GameFiles::open(&root).unwrap();
+        let read = |n: &str| files.read(n).map(|(d, _)| d);
+        assert_eq!(read("language.ini").unwrap(), b"base");
+        assert_eq!(read("x.map").unwrap(), b"map");
+        let _ = fs::remove_dir_all(&root);
+    }
 }
