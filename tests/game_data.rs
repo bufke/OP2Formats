@@ -6,9 +6,12 @@ use op2_formats::{GameFiles, Map, Tileset};
 
 use op2_formats::testdata;
 
-/// OPU's copies of the stock files, in whichever OPU folder the game uses: its own, or the one op2-rs installed.
-fn opu_base(files: &GameFiles) -> std::path::PathBuf {
-    op2_formats::install::opu_dir(files.root()).expect("an OPU folder (op2 setup --opu)").join("base")
+/// A folder of OPU's copies of the stock files (`base/<sub>`), in whichever OPU folder the game uses: its own, or the
+/// one op2-rs installed. Matched case-insensitively, as GameFiles does.
+fn opu_base(files: &GameFiles, sub: &str) -> std::path::PathBuf {
+    let opu = op2_formats::install::opu_dir(files.root()).expect("an OPU folder (op2 setup --opu)");
+    let rel = std::path::Path::new("base").join(sub);
+    op2_formats::install::resolve_ci(&opu, &rel).unwrap_or_else(|| opu.join(rel))
 }
 
 fn game() -> Option<GameFiles> {
@@ -43,7 +46,7 @@ fn vol_tilesets_match_loose_copies() {
     let mut compared = 0;
     for entry in maps_vol.entries().iter().filter(|e| e.name.to_ascii_lowercase().starts_with("well")) {
         let packed = Tileset::parse(&maps_vol.read(entry).unwrap()).unwrap_or_else(|e| panic!("{}: {e}", entry.name));
-        let loose_path = opu_base(&files).join("tilesets").join(entry.name.to_ascii_lowercase());
+        let loose_path = opu_base(&files, "tilesets").join(entry.name.to_ascii_lowercase());
         let Ok(loose_data) = std::fs::read(&loose_path) else { continue };
         let loose = Tileset::parse(&loose_data).unwrap();
         assert_eq!(packed.tile_count, loose.tile_count, "{}", entry.name);
@@ -132,7 +135,7 @@ fn lzh_entries_decompress_and_match_opu_copies() {
             assert!(data.len() > entry.size as usize, "{}: decoded smaller than stored", entry.name);
             let lower = entry.name.to_ascii_lowercase();
             let dir = if lower.ends_with("tek.txt") { "techs" } else { "sheets" };
-            let Ok(loose) = std::fs::read(opu_base(&files).join(dir).join(&lower)) else { continue };
+            let Ok(loose) = std::fs::read(opu_base(&files, dir).join(&lower)) else { continue };
             // Compare the real content, up to OPU's "; Garbage so checksum matches" trailer.
             let end = loose.windows(9).position(|w| w == b"; Garbage").unwrap_or(loose.len());
             let same = data.iter().zip(&loose[..end]).filter(|(a, b)| a == b).count();
