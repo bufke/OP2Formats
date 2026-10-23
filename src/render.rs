@@ -95,6 +95,13 @@ pub fn compose(map: &Map, tilesets: &MapTilesets, px: u32) -> Image {
     Image { width, height, rgba }
 }
 
+/// The minimap colour of a tile graphic (a map's mapping index, as `Terrain::graphic` holds it): its pixels' average,
+/// as [`compose`] at 1 px per tile.
+pub fn graphic_average(map: &Map, tilesets: &MapTilesets, graphic: u16) -> Option<[u8; 4]> {
+    let m = map.mappings.get(graphic as usize)?;
+    Some(average(tilesets.get(m.tileset)?.tile(m.graphic as u32)?, 0, 0, TILE_SIZE))
+}
+
 fn average(tile: TilePixels, x0: u32, y0: u32, block: u32) -> [u8; 4] {
     let mut sum = [0u32; 3];
     for y in y0..y0 + block {
