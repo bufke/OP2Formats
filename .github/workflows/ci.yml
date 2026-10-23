@@ -1,0 +1,24 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Build (default features)
+        run: cargo build --workspace
+      - name: Test (default features)
+        run: cargo test --workspace
+      # inno, opu and fetch-opu: the installer readers and the OPU download client.
+      - name: Test (all features)
+        run: cargo test --workspace --all-features

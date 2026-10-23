@@ -1,0 +1,8 @@
+[workspace]
+resolver = "3"
+members = ["op2-formats"]
+
+# Inherited by op2-formats/Cargo.toml (`edition.workspace`, `license.workspace`), as in op2-rs's workspace.
+[workspace.package]
+edition = "2024"
+license = "GPL-3.0-or-later"
