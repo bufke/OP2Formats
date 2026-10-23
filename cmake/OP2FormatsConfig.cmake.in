@@ -1,0 +1,10 @@
+# OP2Formats, installed: find_package(OP2Formats) gives OP2Formats::OP2Formats (shared, or static with
+# OP2FORMATS_LINK_STATIC on), OP2Formats::shared, OP2Formats::static and op2formats_copy_runtime(<target>).
+# Built with Cargo features: @OP2FORMATS_FEATURES_ALL@.
+
+@PACKAGE_INIT@
+
+option(OP2FORMATS_LINK_STATIC "Link OP2Formats::OP2Formats statically" OFF)
+include("${CMAKE_CURRENT_LIST_DIR}/OP2FormatsTargets.cmake")
+_op2formats_define_targets("@PACKAGE_CMAKE_INSTALL_INCLUDEDIR@" "@PACKAGE_CMAKE_INSTALL_LIBDIR@" "@PACKAGE_OP2FORMATS_SHARED_DIR@")
+check_required_components(OP2Formats)

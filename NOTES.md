@@ -21,12 +21,17 @@ State and plan for OP2Formats. Newest first; keep it short and current.
   the same size and alignment in C and Rust; `tests/c_api.rs` and `tests/all_areas.rs`
   (14 tests) pass with real data. The installer functions are untested against real
   installers.
+- CMake (2026-10-23): top-level `CMakeLists.txt` runs Cargo and defines
+  `OP2Formats::OP2Formats` / `::shared` / `::static` and `op2formats_copy_runtime`; installs a
+  `find_package` config (`cmake/`). Checked with MSVC 2022 and CMake 3.31 (Ninja and the
+  Visual Studio generator, Debug and Release, shared and static, installed and found).
 
 ## Next steps
 
 1. **C interface**: test the installer functions with GOG's and OPU's installers. Try MinGW
-   (`x86_64-pc-windows-gnu`, what op2remake's Qt build uses), Linux and macOS. A CMake config for consumers would help C++ projects. CI could check that the
-   committed header matches `cbindgen`'s output.
+   (`x86_64-pc-windows-gnu`, what op2remake's Qt build uses; the CMake branch for it is
+   written but untried), Linux and macOS. CI could check that the committed header matches
+   `cbindgen`'s output.
 2. **CI**: run it on a self-hosted runner, or switch the trigger to `workflow_dispatch` until
    minutes are available, or make the repo public (public repos get standard runners free).
 3. **Upstream**: tell bufke about this repo; send reader fixes to op2-rs as merge requests;

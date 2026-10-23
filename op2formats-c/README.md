@@ -40,7 +40,42 @@ build leaves out stays in the library and returns `OP2F_STATUS_UNSUPPORTED`, so 
 cargo build -p op2formats-c --release --features fetch-opu
 ```
 
-## Building
+## Using it from CMake
+
+The repository's top-level `CMakeLists.txt` runs Cargo for you and defines imported targets. Either build it as part
+of your project:
+
+```cmake
+add_subdirectory(path/to/OP2Formats)
+target_link_libraries(app PRIVATE OP2Formats::OP2Formats)
+op2formats_copy_runtime(app)   # copies op2formats.dll next to app.exe after each build
+```
+
+or install it once and find it:
+
+```
+cmake -S OP2Formats -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+cmake --build build
+cmake --install build --prefix C:/libs/OP2Formats
+```
+
+```cmake
+find_package(OP2Formats 0.1 REQUIRED)   # with CMAKE_PREFIX_PATH including C:/libs/OP2Formats
+target_link_libraries(app PRIVATE OP2Formats::OP2Formats)
+op2formats_copy_runtime(app)
+```
+
+`OP2Formats::OP2Formats` is the DLL / shared library; set `OP2FORMATS_LINK_STATIC=ON` to link the static library
+instead (`OP2Formats::shared` and `OP2Formats::static` name each directly). Other options: `OP2FORMATS_FEATURES`
+(extra Cargo features, e.g. `fetch-opu`), `OP2FORMATS_RUST_TARGET` (a MinGW compiler gets `x86_64-pc-windows-gnu`
+by default), `OP2FORMATS_BUILD_EXAMPLES`. Cargo has to be installed (https://rustup.rs); `rust-toolchain.toml` picks
+the Rust version. The Rust library is always an optimised build, for Debug and Release programs alike.
+
+Checked on Windows with MSVC 2022 (CMake 3.31): `add_subdirectory` with Ninja (Debug and Release, shared and
+static) and with the Visual Studio generator, and `cmake --install` then `find_package`. The MinGW, Linux and macOS
+branches are written but untried.
+
+## Building by hand
 
 ```
 cargo build -p op2formats-c --release
@@ -60,8 +95,8 @@ cl /std:c++20 /EHsc /MD /I op2formats-c\include main.cpp /link target\release\op
 
 and ship `op2formats.dll` next to the program. Linking the static library instead needs the system libraries Rust's
 standard library uses (`cargo rustc -p op2formats-c --release --lib --crate-type staticlib -- --print
-native-static-libs` lists them): on Windows `op2formats.lib kernel32.lib ntdll.lib userenv.lib ws2_32.lib dbghelp.lib
-advapi32.lib`. Build your program with the same C runtime (`/MD`).
+native-static-libs` lists them): on Windows `op2formats.lib kernel32.lib ntdll.lib userenv.lib ws2_32.lib
+dbghelp.lib`.
 
 Checked so far on Windows with MSVC (Visual Studio 2022 Build Tools), as a DLL and statically, from C++ and C.
 MinGW (`--target x86_64-pc-windows-gnu`), Linux and macOS are expected to work but haven't been tried.
@@ -75,6 +110,9 @@ with a laser and a Plymouth Command Center:
 ```
 op2formats_example ["C:\Games\Outpost 2"] [cm01.map]
 ```
+
+Building OP2Formats with CMake builds it too (`op2formats-c/examples/cpp/op2formats_example.exe` in the build
+folder); its own `CMakeLists.txt` shows a project using an installed copy.
 
 ## Changing the interface
 

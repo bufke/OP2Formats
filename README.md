@@ -41,6 +41,10 @@ cargo test
 first use. Optional features of `op2-formats`: `inno` (GOG's offline installer), `opu` (the
 OPU installer) and `fetch-opu` (downloading it).
 
+C and C++ projects that use CMake can take the library with `add_subdirectory` or, once
+installed, `find_package(OP2Formats)`; the top-level `CMakeLists.txt` runs Cargo. See
+[op2formats-c/README.md](op2formats-c/README.md).
+
 ## Game data
 
 No game data is included or extracted into this repository: you need your own copy of
