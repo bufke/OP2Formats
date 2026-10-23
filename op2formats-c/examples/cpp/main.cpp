@@ -3,11 +3,14 @@
 //   op2formats_example [game folder] [map]
 //
 // Opens the game (the folder given, else $OP2_DIR or an install it finds), prints a map's size and tilesets, the
-// colour of its top-left tile and the Scout's row from vehicles.txt. Build: see op2formats-c/README.md.
+// colour of its top-left tile and the Scout's row from vehicles.txt, and saves two sprites in the current folder:
+// lynx_laser.tga (a red Eden Lynx with a laser, facing south-east) and command_center.tga (a Plymouth Command
+// Center). Build: see op2formats-c/README.md.
 
 #include <op2formats.h>
 
 #include <cstdio>
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
@@ -19,10 +22,28 @@ struct GameFree { void operator()(Op2fGame* p) const { op2f_game_free(p); } };
 struct MapFree { void operator()(Op2fMap* p) const { op2f_map_free(p); } };
 struct TilesetFree { void operator()(Op2fTileset* p) const { op2f_tileset_free(p); } };
 struct SheetFree { void operator()(Op2fSheet* p) const { op2f_sheet_free(p); } };
+struct SpritesFree { void operator()(Op2fSprites* p) const { op2f_sprites_free(p); } };
+struct ImageFree { void operator()(Op2fImage* p) const { op2f_image_free(p); } };
 using Game = std::unique_ptr<Op2fGame, GameFree>;
 using Map = std::unique_ptr<Op2fMap, MapFree>;
 using Tileset = std::unique_ptr<Op2fTileset, TilesetFree>;
 using Sheet = std::unique_ptr<Op2fSheet, SheetFree>;
+using Sprites = std::unique_ptr<Op2fSprites, SpritesFree>;
+using Image = std::unique_ptr<Op2fImage, ImageFree>;
+
+// Writes an image as an uncompressed 32-bit TGA (BGRA, top-down), which most image viewers open.
+bool saveTga(const Op2fImage* image, const char* path) {
+    const uint32_t w = op2f_image_width(image), h = op2f_image_height(image);
+    const uint8_t* rgba = op2f_image_rgba(image);
+    std::ofstream f(path, std::ios::binary);
+    const char header[18] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, char(w), char(w >> 8), char(h), char(h >> 8), 32, 0x28};
+    f.write(header, sizeof header);
+    for (size_t i = 0; i < size_t(w) * h; ++i) {
+        const char bgra[4] = {char(rgba[i * 4 + 2]), char(rgba[i * 4 + 1]), char(rgba[i * 4]), char(rgba[i * 4 + 3])};
+        f.write(bgra, 4);
+    }
+    return bool(f);
+}
 
 std::string lastError() {
     std::string s(op2f_last_error(nullptr, 0), '\0');
@@ -99,5 +120,31 @@ int main(int argc, char** argv) {
         std::string cell = getString([&](char* b, size_t c, size_t* l) { return op2f_sheet_cell(sheet.get(), row, col, b, c, l); });
         std::printf("  %-20s %s\n", header.c_str(), cell.c_str());
     }
+
+    Op2fSprites* rawSprites = nullptr;
+    if (!check(op2f_sprites_open(game.get(), &rawSprites), "loading the sprites")) return 1;
+    Sprites sprites(rawSprites);
+    std::printf("sprites: %zu images, %zu animations\n", op2f_sprites_image_count(sprites.get()),
+                op2f_sprites_animation_count(sprites.get()));
+
+    // Player 1 is red; rotation 32 is south-east (0 east, clockwise).
+    Op2fImage* rawImage = nullptr;
+    if (!check(op2f_sprites_tank(sprites.get(), "Lynx", "LASER", false, 32, 1, &rawImage), "drawing the Lynx")) return 1;
+    Image lynx(rawImage);
+    std::printf("lynx_laser.tga: %ux%u, hotspot (%d, %d)\n", op2f_image_width(lynx.get()), op2f_image_height(lynx.get()),
+                op2f_image_hotspot_x(lynx.get()), op2f_image_hotspot_y(lynx.get()));
+    if (!saveTga(lynx.get(), "lynx_laser.tga")) return 1;
+
+    // Slot 0 is the construction sequence; its last frame is the finished structure.
+    size_t anim = 0;
+    Op2fAnimationInfo info;
+    if (!check(op2f_building_animation("COMMAND", true, 0, &anim), "finding the Command Center") ||
+        !check(op2f_sprites_animation_info(sprites.get(), anim, &info), "reading its animation"))
+        return 1;
+    if (!check(op2f_sprites_frame(sprites.get(), anim, info.frame_count - 1, 0, false, &rawImage), "drawing it")) return 1;
+    Image command(rawImage);
+    std::printf("command_center.tga: animation %zu frame %u, %ux%u\n", anim, info.frame_count - 1,
+                op2f_image_width(command.get()), op2f_image_height(command.get()));
+    if (!saveTga(command.get(), "command_center.tga")) return 1;
     return 0;
 }

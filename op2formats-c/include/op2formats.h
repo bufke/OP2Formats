@@ -27,6 +27,9 @@
 // Bytes of one 32x32 tile as RGBA.
 #define OP2F_TILE_RGBA_BYTES 4096
 
+// Number of player colours (`color.bmp` ramps): blue, red, green, yellow, cyan, magenta.
+#define OP2F_PLAYER_COLORS 6
+
 // Result of a call that can fail.
 typedef enum Op2fStatus {
   OP2F_STATUS_OK = 0,
@@ -79,11 +82,18 @@ typedef struct Op2fBytes Op2fBytes;
 // An opened game folder: loose files (with OPU's overrides) and `.vol` archives, found by name.
 typedef struct Op2fGame Op2fGame;
 
+// An RGBA image the library drew: a sprite image or a composited animation frame.
+typedef struct Op2fImage Op2fImage;
+
 // A parsed `.map` file.
 typedef struct Op2fMap Op2fMap;
 
 // A tab-separated stat sheet (`vehicles.txt`, `weapons.txt`, `building.txt`, ...).
 typedef struct Op2fSheet Op2fSheet;
+
+// The game's sprites: `op2_art.prt` (palettes, images, animations) with the pixels in `OP2_ART.BMP` and the
+// player colours in `color.bmp`.
+typedef struct Op2fSprites Op2fSprites;
 
 // A decoded tileset image (a strip of 32x32 tiles).
 typedef struct Op2fTileset Op2fTileset;
@@ -116,6 +126,28 @@ typedef struct Op2fTileMapping {
   uint16_t animation_count;
   uint16_t animation_delay;
 } Op2fTileMapping;
+
+// One image in `op2_art.prt`.
+typedef struct Op2fImageInfo {
+  uint32_t width;
+  uint32_t height;
+  // The image's type bits as stored. Bit 0: an in-game graphic (else a menu one); bit 2: a 1-bit shadow.
+  uint16_t kind;
+  // Index of its palette.
+  uint16_t palette;
+  // A 1-bit shadow, drawn as translucent black.
+  bool shadow;
+} Op2fImageInfo;
+
+// One animation in `op2_art.prt`.
+typedef struct Op2fAnimationInfo {
+  uint32_t frame_count;
+  // The frame pixel that sits on the object's position (what `op2f_image_hotspot_x`/`_y` give for its frames).
+  int32_t displacement_x;
+  int32_t displacement_y;
+  // Selection box, in the same frame coordinates: left, top, right, bottom.
+  int32_t selection[4];
+} Op2fAnimationInfo;
 
 #ifdef __cplusplus
 extern "C" {
@@ -400,6 +432,146 @@ enum Op2fStatus op2f_sheet_cell(const struct Op2fSheet *sheet,
 // # Safety
 // `sheet` is a live handle; `code` a string; `row` writable.
 enum Op2fStatus op2f_sheet_find_row(const struct Op2fSheet *sheet, const char *code, size_t *row);
+
+// Loads the game's sprites (`op2_art.prt`, `OP2_ART.BMP` and, when present, `color.bmp`).
+//
+// # Safety
+// `game` is a live handle; `out` writable.
+enum Op2fStatus op2f_sprites_open(const struct Op2fGame *game, struct Op2fSprites **out);
+
+// # Safety
+// `sprites` is NULL or a live handle, not used afterwards.
+void op2f_sprites_free(struct Op2fSprites *sprites);
+
+// Number of images.
+//
+// # Safety
+// `sprites` is NULL or a live handle.
+size_t op2f_sprites_image_count(const struct Op2fSprites *sprites);
+
+// Number of animations.
+//
+// # Safety
+// `sprites` is NULL or a live handle.
+size_t op2f_sprites_animation_count(const struct Op2fSprites *sprites);
+
+// # Safety
+// `sprites` is a live handle; `out` writable.
+enum Op2fStatus op2f_sprites_image_info(const struct Op2fSprites *sprites,
+                                        size_t index,
+                                        struct Op2fImageInfo *out);
+
+// # Safety
+// `sprites` is a live handle; `out` writable.
+enum Op2fStatus op2f_sprites_animation_info(const struct Op2fSprites *sprites,
+                                            size_t animation,
+                                            struct Op2fAnimationInfo *out);
+
+// Draws image `index` on its own as RGBA (index 0 transparent, shadows translucent black); its hotspot is (0, 0).
+// `player` as in `op2f_sprites_frame`.
+//
+// # Safety
+// `sprites` is a live handle; `out` writable.
+enum Op2fStatus op2f_sprites_image(const struct Op2fSprites *sprites,
+                                   size_t index,
+                                   int32_t player,
+                                   struct Op2fImage **out);
+
+// Composites frame `frame` of animation `animation` (its layers drawn in order) as RGBA. `player` < 0 draws the
+// palette as stored; 0 to `OP2F_PLAYER_COLORS` - 1 draws that player's colour. With `aligned`, the canvas covers
+// every frame of the animation, so all its frames have one size and hotspot; otherwise it is cropped to this frame.
+//
+// # Safety
+// `sprites` is a live handle; `out` writable.
+enum Op2fStatus op2f_sprites_frame(const struct Op2fSprites *sprites,
+                                   size_t animation,
+                                   size_t frame,
+                                   int32_t player,
+                                   bool aligned,
+                                   struct Op2fImage **out);
+
+// The game's click test on a frame: whether a click at (`x`, `y`) lands on it, in frame coordinates (map pixel -
+// object pixel + the animation's displacement), with the original's quirks (Outpost2.exe 0x404F40).
+//
+// # Safety
+// `sprites` is a live handle; `out` writable.
+enum Op2fStatus op2f_sprites_hit(const struct Op2fSprites *sprites,
+                                 size_t animation,
+                                 size_t frame,
+                                 int32_t x,
+                                 int32_t y,
+                                 bool *out);
+
+// Which animation the game draws for a vehicle: `code` is its `vehicles.txt` code name (e.g. "LIGHT_TANK") or common
+// name ("Lynx", "ConVec"), `state` 0 for normal (1-3 are working states, falling back to 0 like the game), and
+// `rotation` its facing, 0-255 with 0 east, turning clockwise. Read from Outpost2.exe's unit types; see
+// op2-formats' units.rs.
+//
+// # Safety
+// `code` is a string; `out` writable.
+enum Op2fStatus op2f_vehicle_animation(const char *code,
+                                       bool plymouth,
+                                       uint32_t state,
+                                       uint8_t rotation,
+                                       size_t *out);
+
+// Which animation the game draws for a structure: `code` is its `building.txt` code name (e.g. "COMMAND"), `slot`
+// 0 the structure as built (its construction sequence, ending in the finished building), 1 and 2 damaged, 3
+// destroyed, 5-8 ambient animations. A slot the type doesn't have gives `OP2F_STATUS_NOT_FOUND`.
+//
+// # Safety
+// `code` is a string; `out` writable.
+enum Op2fStatus op2f_building_animation(const char *code,
+                                        bool plymouth,
+                                        uint32_t slot,
+                                        size_t *out);
+
+// Draws a tank (`chassis` "LIGHT_TANK"/"Lynx", "MED_TANK"/"Panther" or "BIG_TANK"/"Tiger") with `weapon`'s turret (a `weapons.txt` code name, e.g. "LASER"), both facing `rotation`, as one
+// image with its hotspot on the unit's position. `player` as in `op2f_sprites_frame`.
+//
+// # Safety
+// `sprites` is a live handle; `chassis` and `weapon` strings; `out` writable.
+enum Op2fStatus op2f_sprites_tank(const struct Op2fSprites *sprites,
+                                  const char *chassis,
+                                  const char *weapon,
+                                  bool plymouth,
+                                  uint8_t rotation,
+                                  int32_t player,
+                                  struct Op2fImage **out);
+
+// # Safety
+// `image` is NULL or a live handle, not used afterwards.
+void op2f_image_free(struct Op2fImage *image);
+
+// Width in pixels.
+//
+// # Safety
+// `image` is NULL or a live handle.
+uint32_t op2f_image_width(const struct Op2fImage *image);
+
+// Height in pixels.
+//
+// # Safety
+// `image` is NULL or a live handle.
+uint32_t op2f_image_height(const struct Op2fImage *image);
+
+// The pixel that sits on the object's map position: draw the image with its top-left corner at the object's pixel
+// position minus the hotspot.
+//
+// # Safety
+// `image` is NULL or a live handle.
+int32_t op2f_image_hotspot_x(const struct Op2fImage *image);
+
+// # Safety
+// `image` is NULL or a live handle.
+int32_t op2f_image_hotspot_y(const struct Op2fImage *image);
+
+// The pixels, RGBA with straight (not premultiplied) alpha, row by row: width * height * 4 bytes, valid until the
+// image is freed. NULL for an empty image.
+//
+// # Safety
+// `image` is NULL or a live handle.
+const uint8_t *op2f_image_rgba(const struct Op2fImage *image);
 
 // Opens a `.vol` archive by path. Entries are read from the file when asked for.
 //

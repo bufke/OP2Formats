@@ -13,8 +13,10 @@ What it covers so far:
 | Tilesets | open by name or parse a BMP/PBMP, tile count, one tile as RGBA |
 | Sheets | open (`vehicles.txt`, `weapons.txt`, ...) or parse, column names, rows, cells, find a row by code name |
 | `.vol` archives | open or parse, entry names, find, read an entry (LZH entries decompressed) |
+| Sprites | load `op2_art.prt`; image and animation info; draw an image or an animation frame as RGBA in any player colour, with its hotspot; the game's click test on a frame |
+| Unit art | which animation the game draws for a vehicle (by state and facing) or a structure (by slot); a tank drawn with its turret |
 
-Sprites (`op2_art.prt`), sounds, strings and the rest of op2-formats aren't exposed yet.
+Sounds, strings, the cutscenes and the rest of op2-formats aren't exposed yet.
 
 ## Building
 
@@ -45,7 +47,8 @@ MinGW (`--target x86_64-pc-windows-gnu`), Linux and macOS are expected to work b
 ## Example
 
 [`examples/cpp/main.cpp`](examples/cpp/main.cpp) opens the game, prints a map's size and tilesets, decodes the
-top-left tile's colour and prints the Scout's row from `vehicles.txt`:
+top-left tile's colour, prints the Scout's row from `vehicles.txt` and saves two sprites as TGA files: a red Lynx
+with a laser and a Plymouth Command Center:
 
 ```
 op2formats_example ["C:\Games\Outpost 2"] [cm01.map]

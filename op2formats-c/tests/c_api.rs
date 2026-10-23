@@ -137,3 +137,46 @@ fn game_maps_tilesets_sheets_and_vols() {
     assert!(unsafe { op2f_map_width(from_vol) } > 0);
     unsafe { (op2f_map_free(from_vol), op2f_bytes_free(bytes), op2f_vol_free(vol), op2f_game_free(game)) };
 }
+
+#[test]
+fn sprites_draw_images_and_frames() {
+    let Some(game) = game() else { return };
+    let mut sprites = null_mut();
+    assert_eq!(unsafe { op2f_sprites_open(game, &mut sprites) }, Op2fStatus::Ok, "{}", last_error());
+    let (images, animations) = unsafe { (op2f_sprites_image_count(sprites), op2f_sprites_animation_count(sprites)) };
+    assert!(images > 1000 && animations > 1000, "{images} images, {animations} animations");
+
+    let mut info = std::mem::MaybeUninit::<Op2fImageInfo>::uninit();
+    assert_eq!(unsafe { op2f_sprites_image_info(sprites, 0, info.as_mut_ptr()) }, Op2fStatus::Ok);
+    let info = unsafe { info.assume_init() };
+    let mut image = null_mut();
+    assert_eq!(unsafe { op2f_sprites_image(sprites, 0, -1, &mut image) }, Op2fStatus::Ok, "{}", last_error());
+    assert_eq!(unsafe { (op2f_image_width(image), op2f_image_height(image)) }, (info.width, info.height));
+    unsafe { op2f_image_free(image) };
+    assert_eq!(unsafe { op2f_sprites_image(sprites, images, -1, &mut null_mut()) }, Op2fStatus::OutOfRange);
+    assert_eq!(unsafe { op2f_sprites_image(sprites, 0, OP2F_PLAYER_COLORS, &mut null_mut()) }, Op2fStatus::OutOfRange);
+
+    // Aligned frames of one animation share a canvas and hotspot; each has drawn pixels.
+    let anim = (0..animations)
+        .find(|&a| {
+            let mut info = std::mem::MaybeUninit::<Op2fAnimationInfo>::uninit();
+            unsafe { op2f_sprites_animation_info(sprites, a, info.as_mut_ptr()) };
+            unsafe { info.assume_init() }.frame_count > 4
+        })
+        .expect("an animation with several frames");
+    let mut first = None;
+    for frame in 0..4 {
+        let mut image = null_mut();
+        let status = unsafe { op2f_sprites_frame(sprites, anim, frame, 1, true, &mut image) };
+        assert_eq!(status, Op2fStatus::Ok, "{}", last_error());
+        let (w, h) = unsafe { (op2f_image_width(image), op2f_image_height(image)) };
+        let hotspot = unsafe { (op2f_image_hotspot_x(image), op2f_image_hotspot_y(image)) };
+        assert_eq!(*first.get_or_insert((w, h, hotspot)), (w, h, hotspot), "frame {frame} of animation {anim}");
+        let rgba = unsafe { std::slice::from_raw_parts(op2f_image_rgba(image), (w * h * 4) as usize) };
+        assert!(rgba.chunks(4).any(|p| p[3] != 0), "frame {frame} of animation {anim} is empty");
+        unsafe { op2f_image_free(image) };
+    }
+    let mut hit = false;
+    assert_eq!(unsafe { op2f_sprites_hit(sprites, anim, 0, 0, 0, &mut hit) }, Op2fStatus::Ok);
+    unsafe { (op2f_sprites_free(sprites), op2f_game_free(game)) };
+}
