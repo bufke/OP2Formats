@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["op2-formats"]
+members = ["op2-formats", "op2formats-c"]
 
 # Inherited by op2-formats/Cargo.toml (`edition.workspace`, `license.workspace`), as in op2-rs's workspace.
 [workspace.package]

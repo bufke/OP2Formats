@@ -7,6 +7,13 @@ same code runs on Windows, Linux and macOS: `.vol` archives (including LZH-compr
 entries), `.map` files, tilesets, `op2_art.prt` sprites, the stat sheets, sounds, the AVI
 cutscenes, tables in `Outpost2.exe`, and the GOG and OPU installers.
 
+## Layout
+
+| Folder | What |
+|---|---|
+| `op2-formats/` | The Rust library: the readers themselves |
+| `op2formats-c/` | A C interface for C, C++ and other languages: `op2formats.dll` / `.so` / `.dylib` and a static library, with the header `include/op2formats.h` (see its [README](op2formats-c/README.md)) |
+
 ## Where it comes from
 
 This is the `op2-formats` crate of [op2-rs](https://gitlab.com/bufke/op2-rs), bufke's

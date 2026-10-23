@@ -1,0 +1,15 @@
+[package]
+name = "op2formats-c"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "C interface to op2-formats, for C, C++ and other languages"
+publish = false
+
+[lib]
+# op2formats.dll / libop2formats.so / libop2formats.dylib, plus a static library.
+name = "op2formats"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[dependencies]
+op2-formats = { path = "../op2-formats" }
