@@ -1,14 +1,21 @@
 //! Checks against a real game install. Skipped (passing) when no install is found, since the
 //! game data can't be committed.
 
+use std::path::{Path, PathBuf};
+
 use op2_formats::render::MapTilesets;
 use op2_formats::{GameFiles, Map, Tileset};
 
 use op2_formats::testdata;
 
-/// OPU's copies of the stock files, in whichever OPU folder the game uses: its own, or the one op2-rs installed.
-fn opu_base(files: &GameFiles) -> std::path::PathBuf {
-    op2_formats::install::opu_dir(files.root()).expect("an OPU folder (op2 setup --opu)").join("base")
+/// The OPU folder the game uses: its own, or the one op2-rs installed.
+fn opu_dir(files: &GameFiles) -> PathBuf {
+    op2_formats::install::opu_dir(files.root()).expect("an OPU folder (op2 setup --opu)")
+}
+
+/// OPU's loose copy of a stock file: `rel` under its `base` folder, in any case (`BASE` in copies from Windows).
+fn opu_copy(opu: &Path, rel: impl AsRef<Path>) -> Option<Vec<u8>> {
+    op2_formats::install::resolve_ci(opu, &Path::new("base").join(rel)).and_then(|p| std::fs::read(p).ok())
 }
 
 fn game() -> Option<GameFiles> {
@@ -40,11 +47,11 @@ fn vol_tilesets_match_loose_copies() {
     let Some(files) = game() else { return };
     let (_, maps_vol) = files.vols().find(|(n, _)| n.eq_ignore_ascii_case("maps.vol")).expect("maps.vol");
 
+    let opu = opu_dir(&files);
     let mut compared = 0;
     for entry in maps_vol.entries().iter().filter(|e| e.name.to_ascii_lowercase().starts_with("well")) {
         let packed = Tileset::parse(&maps_vol.read(entry).unwrap()).unwrap_or_else(|e| panic!("{}: {e}", entry.name));
-        let loose_path = opu_base(&files).join("tilesets").join(entry.name.to_ascii_lowercase());
-        let Ok(loose_data) = std::fs::read(&loose_path) else { continue };
+        let Some(loose_data) = opu_copy(&opu, Path::new("tilesets").join(&entry.name)) else { continue };
         let loose = Tileset::parse(&loose_data).unwrap();
         assert_eq!(packed.tile_count, loose.tile_count, "{}", entry.name);
         assert!(packed.rgba() == loose.rgba(), "{}: pixels differ between vol and loose copy", entry.name);
@@ -125,6 +132,7 @@ fn every_sprite_image_decodes_and_unit_tables_resolve() {
 #[test]
 fn lzh_entries_decompress_and_match_opu_copies() {
     let Some(files) = game() else { return };
+    let opu = opu_dir(&files);
     let mut checked = 0;
     for (archive, vol) in files.vols() {
         for entry in vol.entries().iter().filter(|e| e.compression == op2_formats::vol::Compression::Lzh) {
@@ -132,7 +140,7 @@ fn lzh_entries_decompress_and_match_opu_copies() {
             assert!(data.len() > entry.size as usize, "{}: decoded smaller than stored", entry.name);
             let lower = entry.name.to_ascii_lowercase();
             let dir = if lower.ends_with("tek.txt") { "techs" } else { "sheets" };
-            let Ok(loose) = std::fs::read(opu_base(&files).join(dir).join(&lower)) else { continue };
+            let Some(loose) = opu_copy(&opu, Path::new(dir).join(&lower)) else { continue };
             // Compare the real content, up to OPU's "; Garbage so checksum matches" trailer.
             let end = loose.windows(9).position(|w| w == b"; Garbage").unwrap_or(loose.len());
             let same = data.iter().zip(&loose[..end]).filter(|(a, b)| a == b).count();
