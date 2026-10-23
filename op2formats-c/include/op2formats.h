@@ -24,11 +24,45 @@
 #include <stdint.h>
 #include <stdlib.h>
 
+// Number of SoundIDs (`op2f_exe_sound_files`).
+#define OP2F_SOUND_COUNT 252
+
+// Rows of the structures' ambient animation sequence (`op2f_exe_ambient_sequence`), 5 bytes each.
+#define OP2F_AMBIENT_ROWS 11
+
 // Bytes of one 32x32 tile as RGBA.
 #define OP2F_TILE_RGBA_BYTES 4096
 
+// Bytes of one terrain type record (`op2f_map_terrain_type`), kept raw.
+#define OP2F_TERRAIN_TYPE_BYTES 264
+
+// The layer unresolved tiles use.
+#define OP2F_MISSING_LAYER 0
+
+// Pixels per tile in `op2f_tile_palette_overview`.
+#define OP2F_OVERVIEW_TILE 8
+
+// Size of `virmask.raw`.
+#define OP2F_VIRMASK_BYTES 2048
+
 // Number of player colours (`color.bmp` ramps): blue, red, green, yellow, cyan, magenta.
 #define OP2F_PLAYER_COLORS 6
+
+// Room for a code name or key in the stats structs, NUL included. A longer one fails with
+// `OP2F_STATUS_INVALID_DATA` rather than being cut short.
+#define OP2F_CODE_BYTES 64
+
+// String id of the first vehicle name: vehicle row `r` of `vehicles.txt` is named by string `OP2F_VEHICLE_NAMES + r`.
+#define OP2F_VEHICLE_NAMES 718
+
+// String id of the first structure name (row 0 of `building.txt`).
+#define OP2F_BUILDING_NAMES 735
+
+// String id of the first weapon name (row 0 of `weapons.txt`).
+#define OP2F_WEAPON_NAMES 819
+
+// Game animation id of animation 0: the game's ids are art indices plus this.
+#define OP2F_ANIM_ID_BASE 101
 
 // Result of a call that can fail.
 typedef enum Op2fStatus {
@@ -53,6 +87,161 @@ typedef enum Op2fStatus {
   OP2F_STATUS_PANIC,
 } Op2fStatus;
 
+// Which release a game folder holds.
+typedef enum Op2fRelease {
+  // GOG's release (it has GOG's `goggame-*.info`).
+  OP2F_RELEASE_GOG,
+  // The original CD release, or a copy of one.
+  OP2F_RELEASE_CD,
+} Op2fRelease;
+
+// A text field of an install check.
+typedef enum Op2fInstallText {
+  // The folder checked.
+  OP2F_INSTALL_TEXT_DIR,
+  // The release in a few words, e.g. "GOG 1.2 + OPU 1.4.1".
+  OP2F_INSTALL_TEXT_SUMMARY,
+  // One line with details, e.g. "GOG 1.2 + OPU 1.4.1 (Outpost2.exe 1.2.0.7, GOG's)".
+  OP2F_INSTALL_TEXT_DESCRIPTION,
+  // The problems in one short line ("missing maps.vol, e01.dll"); empty when there are none.
+  OP2F_INSTALL_TEXT_SHORT_PROBLEM,
+  // OPU's version ("1.4.1", or empty when unreadable); `OP2F_STATUS_NOT_FOUND` without OPU.
+  OP2F_INSTALL_TEXT_OPU_VERSION,
+  // The OPU folder layered over the game; `OP2F_STATUS_NOT_FOUND` without one.
+  OP2F_INSTALL_TEXT_OPU_DIR,
+  // `Outpost2.exe`'s FileVersion; `OP2F_STATUS_NOT_FOUND` when unreadable.
+  OP2F_INSTALL_TEXT_EXE_VERSION,
+} Op2fInstallText;
+
+// A list field of an install check.
+typedef enum Op2fInstallList {
+  // Problems worth telling the player, one per line.
+  OP2F_INSTALL_LIST_PROBLEMS,
+  // Required files not found.
+  OP2F_INSTALL_LIST_MISSING,
+  // Optional files not found.
+  OP2F_INSTALL_LIST_MISSING_OPTIONAL,
+} Op2fInstallList;
+
+// A folder op2-formats keeps its own data in.
+typedef enum Op2fDataDir {
+  // The data folder itself: the platform's, or the one given to `op2f_set_data_dir`.
+  OP2F_DATA_DIR_DATA,
+  // Where GOG's installer is unpacked (`op2f_inno_extract_game`).
+  OP2F_DATA_DIR_EXTRACT,
+  // Where the OPU update is installed (`op2f_opu_install`).
+  OP2F_DATA_DIR_OPU,
+  // Where OPU's installer is downloaded (`op2f_opu_download`).
+  OP2F_DATA_DIR_DOWNLOADS,
+} Op2fDataDir;
+
+// A text of an installer's header.
+typedef enum Op2fInnoText {
+  // The data version line, e.g. "Inno Setup Setup Data (5.6.2) (u)".
+  OP2F_INNO_TEXT_VERSION,
+  // The product it installs ("Outpost 2" for GOG's).
+  OP2F_INNO_TEXT_APP_NAME,
+} Op2fInnoText;
+
+// A fact about the OPU release op2-formats installs.
+typedef enum Op2fOpuText {
+  // "1.4.1".
+  OP2F_OPU_TEXT_VERSION,
+  // The official download page.
+  OP2F_OPU_TEXT_DOWNLOAD_PAGE,
+  // The installer's URL.
+  OP2F_OPU_TEXT_PACKAGE_URL,
+  // The installer's file name.
+  OP2F_OPU_TEXT_PACKAGE_NAME,
+  // The installer's SHA-256, in hex.
+  OP2F_OPU_TEXT_PACKAGE_SHA256,
+  // The credit OPU's license asks for.
+  OP2F_OPU_TEXT_CREDIT,
+} Op2fOpuText;
+
+// How a `.vol` entry is stored. Only `NONE` and `LZH` are read (the game's archives use nothing else).
+typedef enum Op2fCompression {
+  OP2F_COMPRESSION_NONE,
+  OP2F_COMPRESSION_RLE,
+  OP2F_COMPRESSION_LZ,
+  OP2F_COMPRESSION_LZH,
+  OP2F_COMPRESSION_UNKNOWN,
+} Op2fCompression;
+
+// How fast units cross a cell type, in coarse buckets (for overlays).
+typedef enum Op2fSpeed {
+  OP2F_SPEED_FAST,
+  OP2F_SPEED_MEDIUM,
+  OP2F_SPEED_SLOW,
+  // Vents and fumaroles.
+  OP2F_SPEED_SPECIAL,
+  OP2F_SPEED_IMPASSABLE,
+} Op2fSpeed;
+
+// A text of a dialog.
+typedef enum Op2fDialogText {
+  OP2F_DIALOG_TEXT_TITLE,
+  // `OP2F_STATUS_NOT_FOUND` without a font.
+  OP2F_DIALOG_TEXT_FONT_NAME,
+  // The menu's id or name; `OP2F_STATUS_NOT_FOUND` without one.
+  OP2F_DIALOG_TEXT_MENU,
+  // The window class; `OP2F_STATUS_NOT_FOUND` for the default.
+  OP2F_DIALOG_TEXT_CLASS,
+} Op2fDialogText;
+
+// A table of the rules.
+typedef enum Op2fRulesTable {
+  OP2F_RULES_TABLE_VEHICLES,
+  OP2F_RULES_TABLE_WEAPONS,
+  OP2F_RULES_TABLE_BUILDINGS,
+  OP2F_RULES_TABLE_SPACE,
+  OP2F_RULES_TABLE_MINES,
+} Op2fRulesTable;
+
+// A vehicle's movement class; the values are the game's TrackType.
+typedef enum Op2fTrack {
+  OP2F_TRACK_LEGGED = 0,
+  OP2F_TRACK_WHEELED = 1,
+  OP2F_TRACK_MINER = 2,
+  OP2F_TRACK_TRACKED = 3,
+  OP2F_TRACK_HOVER = 4,
+} Op2fTrack;
+
+// Which colony can use a unit or item.
+typedef enum Op2fOwner {
+  OP2F_OWNER_EDEN,
+  OP2F_OWNER_PLYMOUTH,
+  OP2F_OWNER_BOTH,
+  // Gaia: neither (disasters and the like).
+  OP2F_OWNER_GAIA,
+} Op2fOwner;
+
+// A text of a research topic.
+typedef enum Op2fTechText {
+  OP2F_TECH_TEXT_NAME,
+  OP2F_TECH_TEXT_DESCRIPTION,
+  OP2F_TECH_TEXT_TEASER,
+  OP2F_TECH_TEXT_IMPROVE_DESCRIPTION,
+} Op2fTechText;
+
+// A table of unit types with art.
+typedef enum Op2fUnitArtTable {
+  // Vehicles (`op2f_vehicle_animation`).
+  OP2F_UNIT_ART_TABLE_VEHICLES,
+  // Structures (`op2f_building_animation`).
+  OP2F_UNIT_ART_TABLE_BUILDINGS,
+  // Weapons with turrets (`op2f_turret_animation`).
+  OP2F_UNIT_ART_TABLE_TURRETS,
+} Op2fUnitArtTable;
+
+// How a unit is clicked.
+typedef enum Op2fPickKind {
+  // Anywhere in the animation's selection box (vehicles, Guard Posts).
+  OP2F_PICK_KIND_BOX,
+  // The box, then the frame's pixels (or the overlay's): structures.
+  OP2F_PICK_KIND_PIXELS,
+} Op2fPickKind;
+
 // A tile's movement class: the low 5 bits of its tile word ([`Op2fTile::cell_type`]). Values 12-20 are unused,
 // and 26-31 all mean a tube.
 typedef enum Op2fCellType {
@@ -76,8 +265,23 @@ typedef enum Op2fCellType {
   OP2F_CELL_TYPE_TUBE = 26,
 } Op2fCellType;
 
+// An animated cursor (`.ani`).
+typedef struct Op2fAniCursor Op2fAniCursor;
+
+// A decoded bitmap, with its palette and indices when it has one.
+typedef struct Op2fBitmap Op2fBitmap;
+
 // A block of bytes the library allocated.
 typedef struct Op2fBytes Op2fBytes;
+
+// A `.clm` music archive (`op2.clm`). Opened from a file, only its index is read; tracks are read when asked for.
+typedef struct Op2fClm Op2fClm;
+
+// A dialog template.
+typedef struct Op2fDialog Op2fDialog;
+
+// The player's `Outpost2.exe` (or another PE executable), for the tables read from it.
+typedef struct Op2fExe Op2fExe;
 
 // An opened game folder: loose files (with OPU's overrides) and `.vol` archives, found by name.
 typedef struct Op2fGame Op2fGame;
@@ -85,8 +289,36 @@ typedef struct Op2fGame Op2fGame;
 // An RGBA image the library drew: a sprite image or a composited animation frame.
 typedef struct Op2fImage Op2fImage;
 
+// GOG's offline installer (`setup_outpost_2_*.exe`, plus any `-N.bin` parts next to it), opened: its header read,
+// nothing extracted yet.
+typedef struct Op2fInnoInstaller Op2fInnoInstaller;
+
+// What a folder holds and what it's missing.
+typedef struct Op2fInstallCheck Op2fInstallCheck;
+
+// The installs found in the usual places.
+typedef struct Op2fInstallSearch Op2fInstallSearch;
+
 // A parsed `.map` file.
 typedef struct Op2fMap Op2fMap;
+
+// The tilesets a map uses, loaded from the game, for drawing it.
+typedef struct Op2fMapTilesets Op2fMapTilesets;
+
+// A flattened menu template.
+typedef struct Op2fMenu Op2fMenu;
+
+// A Nullsoft (NSIS 3, LZMA) installer's files, as OPU's installer is built.
+typedef struct Op2fNsis Op2fNsis;
+
+// What an OPU install did.
+typedef struct Op2fOpuInstalled Op2fOpuInstalled;
+
+// The resources of a PE file (an `.exe` or `.dll`).
+typedef struct Op2fResources Op2fResources;
+
+// All rule sheets as the game loads them (OPU's loose copies first, else `sheets.vol`).
+typedef struct Op2fRules Op2fRules;
 
 // A tab-separated stat sheet (`vehicles.txt`, `weapons.txt`, `building.txt`, ...).
 typedef struct Op2fSheet Op2fSheet;
@@ -95,11 +327,62 @@ typedef struct Op2fSheet Op2fSheet;
 // player colours in `color.bmp`.
 typedef struct Op2fSprites Op2fSprites;
 
+// A list of strings the library made.
+typedef struct Op2fStringList Op2fStringList;
+
+// Key and value pairs, in their source's order.
+typedef struct Op2fStringPairs Op2fStringPairs;
+
+// Strings with numeric ids (a string table), sorted by id.
+typedef struct Op2fStringTable Op2fStringTable;
+
+// A tech tree file (`edentek.txt`, `ply_tek.txt`, `multitek.txt`, `tutortek.txt`): its research topics.
+typedef struct Op2fTechTree Op2fTechTree;
+
+// Every distinct tile graphic a map uses, as layers of a texture array, so a GPU renderer needs only a layer index
+// per tile. Layer `OP2F_MISSING_LAYER` is a magenta and black checkerboard for unresolved tiles.
+typedef struct Op2fTilePalette Op2fTilePalette;
+
 // A decoded tileset image (a strip of 32x32 tiles).
 typedef struct Op2fTileset Op2fTileset;
 
+// An AVI file with a decoder for its video. Frames can be asked for in any order: the decoder goes back to the
+// nearest keyframe when it has to. One thread at a time may decode from a handle.
+typedef struct Op2fVideo Op2fVideo;
+
 // A `.vol` archive.
 typedef struct Op2fVol Op2fVol;
+
+// One frame of an animation.
+typedef struct Op2fFrameInfo {
+  size_t layer_count;
+  // A field of unknown meaning, as stored (its top bit says `optional2` follows).
+  uint8_t unknown;
+  // Two optional offsets: on a chassis the turret's position, on a turret its muzzle (`op2f_turret_offset`).
+  bool has_optional1;
+  int8_t optional1[2];
+  bool has_optional2;
+  int8_t optional2[2];
+} Op2fFrameInfo;
+
+// One layer of a frame: an image drawn at an offset in frame coordinates.
+typedef struct Op2fLayer {
+  uint16_t image;
+  uint8_t unknown;
+  uint8_t index;
+  int16_t x;
+  int16_t y;
+} Op2fLayer;
+
+// Called while long work goes on, with the caller's `user` pointer, the `stage` the function documents, and how far
+// it is: `done` of `total`. May be NULL.
+typedef void (*Op2fProgress)(void *user, uint32_t stage, uint64_t done, uint64_t total);
+
+// What an extraction wrote.
+typedef struct Op2fExtracted {
+  size_t files;
+  uint64_t bytes;
+} Op2fExtracted;
 
 // One map tile, decoded from its 32-bit tile word.
 typedef struct Op2fTile {
@@ -127,6 +410,72 @@ typedef struct Op2fTileMapping {
   uint16_t animation_delay;
 } Op2fTileMapping;
 
+// A `.vol` entry's storage.
+typedef struct Op2fVolEntryInfo {
+  enum Op2fCompression compression;
+  // The compression code as stored (0x100 none, 0x101 RLE, 0x102 LZ, 0x103 LZH).
+  uint16_t compression_code;
+  // The size in the index: for compressed entries the stored size, not the decoded one.
+  uint32_t size;
+} Op2fVolEntryInfo;
+
+// A tile group (the editor's named blocks of tiles): its size in tiles.
+typedef struct Op2fTileGroupInfo {
+  uint32_t width;
+  uint32_t height;
+} Op2fTileGroupInfo;
+
+// One resource's ids and size.
+typedef struct Op2fResourceInfo {
+  // The numeric type (2 bitmap, 6 string table, ...), or 0 for a named type (`op2f_resource_type`).
+  uint16_t type_id;
+  // The numeric name, or 0 for a named resource (`op2f_resource_name`).
+  uint16_t name_id;
+  uint16_t lang;
+  uint32_t codepage;
+  size_t size;
+} Op2fResourceInfo;
+
+// A bitmap's format.
+typedef struct Op2fBitmapInfo {
+  uint32_t width;
+  uint32_t height;
+  uint16_t bit_count;
+  // BI_RGB 0, BI_RLE8 1, ...
+  uint32_t compression;
+  // Palette entries (0 for true-colour bitmaps).
+  size_t palette_count;
+} Op2fBitmapInfo;
+
+// A dialog's frame, in dialog units.
+typedef struct Op2fDialogInfo {
+  uint32_t style;
+  // x, y, width, height.
+  int16_t rect[4];
+  bool has_font;
+  uint16_t font_size;
+  size_t control_count;
+} Op2fDialogInfo;
+
+// One control of a dialog.
+typedef struct Op2fDialogControl {
+  uint32_t id;
+  uint32_t style;
+  // x, y, width, height in dialog units.
+  int16_t rect[4];
+} Op2fDialogControl;
+
+// A WAVEFORMATEX's fields.
+typedef struct Op2fWaveFormat {
+  // 1 for PCM.
+  uint16_t format_tag;
+  uint16_t channels;
+  uint32_t samples_per_sec;
+  uint32_t avg_bytes_per_sec;
+  uint16_t block_align;
+  uint16_t bits_per_sample;
+} Op2fWaveFormat;
+
 // One image in `op2_art.prt`.
 typedef struct Op2fImageInfo {
   uint32_t width;
@@ -147,7 +496,199 @@ typedef struct Op2fAnimationInfo {
   int32_t displacement_y;
   // Selection box, in the same frame coordinates: left, top, right, bottom.
   int32_t selection[4];
+  // Fields of unknown meaning, as stored.
+  uint32_t unknown;
+  uint32_t unknown2;
+  // Clip rectangles some of its images are drawn inside (`op2f_sprites_animation_appendix`).
+  size_t appendix_count;
 } Op2fAnimationInfo;
+
+// One row of `vehicles.txt`.
+typedef struct Op2fVehicleStats {
+  char code[OP2F_CODE_BYTES];
+  // Key into the game's unit-name strings (not the name itself).
+  char name_key[OP2F_CODE_BYTES];
+  enum Op2fTrack track;
+  enum Op2fOwner owner;
+  int32_t hit_points;
+  // The sheet's armor class, 0-5.
+  uint32_t armor_class;
+  // The armor value the game derives from the class (`op2f_armor_value`).
+  uint32_t armor;
+  // Ticks per tile scale factor: step time = move_speed * the cell's track speed / 512.
+  int32_t move_speed;
+  // Rotation units (of 256 per turn) per tick.
+  int32_t turn_rate;
+  int32_t common_cost;
+  int32_t rare_cost;
+  int32_t build_time;
+  bool vehicle_factory;
+  bool arachnid_factory;
+  int32_t cargo_capacity;
+  int32_t sight_range;
+  bool has_weapon;
+  uint32_t research_topic;
+  int32_t production_rate;
+  int32_t repair_amount;
+} Op2fVehicleStats;
+
+// One row of `weapons.txt` (weapons, disasters and explosions).
+typedef struct Op2fWeaponStats {
+  char code[OP2F_CODE_BYTES];
+  char name_key[OP2F_CODE_BYTES];
+  int32_t damage_radius;
+  int32_t pixels_skipped;
+  // Range in tiles.
+  int32_t range;
+  int32_t turret_turn_rate;
+  enum Op2fOwner owner;
+  int32_t concussion_damage;
+  int32_t penetration_damage;
+  int32_t common_cost;
+  int32_t rare_cost;
+  int32_t build_time;
+  int32_t reload_time;
+  uint32_t research_topic;
+} Op2fWeaponStats;
+
+// One row of `building.txt`.
+typedef struct Op2fBuildingStats {
+  char code[OP2F_CODE_BYTES];
+  char produce_list_key[OP2F_CODE_BYTES];
+  char name_key[OP2F_CODE_BYTES];
+  int32_t width;
+  int32_t height;
+  enum Op2fOwner owner;
+  int32_t hit_points;
+  uint32_t armor_class;
+  uint32_t armor;
+  bool border;
+  int32_t common_cost;
+  int32_t rare_cost;
+  bool structure_kit;
+  int32_t build_points;
+  int32_t common_rubble;
+  int32_t rare_rubble;
+  int32_t power_required;
+  int32_t workers_required;
+  int32_t scientists_required;
+  int32_t sight_range;
+  bool dock_all;
+  bool dock_truck;
+  bool dock_convec;
+  bool dock_evac;
+  bool has_dock_location_eden;
+  int32_t dock_location_eden;
+  bool has_dock_location_plymouth;
+  int32_t dock_location_plymouth;
+  int32_t storage_capacity;
+  int32_t production_capacity;
+  int32_t storage_bays;
+  bool auto_targeted;
+  int32_t explosion_size;
+  int32_t resource_priority;
+  uint32_t research_topic;
+} Op2fBuildingStats;
+
+// One row of `space.txt` (satellites, spaceship modules, rockets, luxury goods).
+typedef struct Op2fSpaceStats {
+  char code[OP2F_CODE_BYTES];
+  char name_key[OP2F_CODE_BYTES];
+  enum Op2fOwner owner;
+  int32_t common_cost;
+  int32_t rare_cost;
+  int32_t build_time;
+  uint32_t research_topic;
+} Op2fSpaceStats;
+
+// One row of `mines.txt`: how a mine's yield changes with the number of truckloads.
+typedef struct Op2fMineYield {
+  char yield_class[OP2F_CODE_BYTES];
+  int32_t variant;
+  int32_t initial_yield_percent;
+  int32_t peak_truck;
+  int32_t peak_yield_percent;
+  int32_t min_truck;
+  int32_t min_yield_percent;
+} Op2fMineYield;
+
+// A research topic's numbers; its texts come from `op2f_tech_text`, its lists from the other `op2f_tech_*` calls.
+typedef struct Op2fTechInfo {
+  uint32_t id;
+  int32_t category;
+  // `COST`, for both colonies.
+  bool has_cost;
+  int32_t cost;
+  bool has_eden_cost;
+  int32_t eden_cost;
+  bool has_plymouth_cost;
+  int32_t plymouth_cost;
+  bool has_max_scientists;
+  int32_t max_scientists;
+  bool has_lab;
+  int32_t lab;
+  size_t requires_count;
+  size_t unit_prop_count;
+  // Other `KEY value` lines (`op2f_tech_other`).
+  size_t other_count;
+} Op2fTechInfo;
+
+// A stat a research topic changes when researched (`UNIT_PROP CODE Property value`).
+typedef struct Op2fTechUnitProp {
+  char code[OP2F_CODE_BYTES];
+  char property[OP2F_CODE_BYTES];
+  int32_t value;
+} Op2fTechUnitProp;
+
+// A unit's click shape.
+typedef struct Op2fPickShape {
+  enum Op2fPickKind kind;
+  // The animation (art index) drawn.
+  size_t animation;
+  // Its frame, for `OP2F_PICK_KIND_PIXELS`.
+  size_t frame;
+  // A structure's second hit animation (`op2f_pick_overlay`), tested at frame 0.
+  bool has_overlay;
+  size_t overlay_animation;
+  // The overlay is placed by the main animation's selection box (mines) rather than its own.
+  bool overlay_main_rect;
+} Op2fPickShape;
+
+// A unit the click considers.
+typedef struct Op2fPickCandidate {
+  // The unit's pixel position (its sprite's hotspot).
+  int32_t x;
+  int32_t y;
+  uint8_t owner;
+  struct Op2fPickShape shape;
+} Op2fPickCandidate;
+
+// An AVI's overall numbers.
+typedef struct Op2fVideoInfo {
+  uint32_t width;
+  uint32_t height;
+  // Video frames (0 without a Cinepak video stream).
+  uint32_t frame_count;
+  // Frames per second as rate / scale.
+  uint32_t rate;
+  uint32_t scale;
+  uint32_t micros_per_frame;
+  bool has_audio;
+  // The audio stream's format (format_tag 2 is MS ADPCM; `op2f_video_audio` decodes it to 16-bit PCM).
+  struct Op2fWaveFormat audio;
+} Op2fVideoInfo;
+
+// One stream of an AVI.
+typedef struct Op2fStreamInfo {
+  // "vids", "auds", ...
+  uint8_t kind[4];
+  // The codec's FourCC, e.g. "cvid".
+  uint8_t handler[4];
+  uint32_t scale;
+  uint32_t rate;
+  uint32_t length;
+  size_t chunk_count;
+} Op2fStreamInfo;
 
 #ifdef __cplusplus
 extern "C" {
@@ -178,6 +719,307 @@ const uint8_t *op2f_bytes_data(const struct Op2fBytes *bytes);
 // # Safety
 // `bytes` is NULL or a live handle.
 size_t op2f_bytes_len(const struct Op2fBytes *bytes);
+
+// # Safety
+// `image` is NULL or a live handle, not used afterwards.
+void op2f_image_free(struct Op2fImage *image);
+
+// Width in pixels.
+//
+// # Safety
+// `image` is NULL or a live handle.
+uint32_t op2f_image_width(const struct Op2fImage *image);
+
+// Height in pixels.
+//
+// # Safety
+// `image` is NULL or a live handle.
+uint32_t op2f_image_height(const struct Op2fImage *image);
+
+// The pixel that sits on the object's map position: draw the image with its top-left corner at the object's pixel
+// position minus the hotspot.
+//
+// # Safety
+// `image` is NULL or a live handle.
+int32_t op2f_image_hotspot_x(const struct Op2fImage *image);
+
+// # Safety
+// `image` is NULL or a live handle.
+int32_t op2f_image_hotspot_y(const struct Op2fImage *image);
+
+// The pixels, RGBA with straight (not premultiplied) alpha, row by row: width * height * 4 bytes, valid until the
+// image is freed. NULL for an empty image.
+//
+// # Safety
+// `image` is NULL or a live handle.
+const uint8_t *op2f_image_rgba(const struct Op2fImage *image);
+
+// Number of palettes.
+//
+// # Safety
+// `sprites` is NULL or a live handle.
+size_t op2f_sprites_palette_count(const struct Op2fSprites *sprites);
+
+// Palette `index` as stored: 256 RGB triples, 768 bytes into `out`.
+//
+// # Safety
+// `sprites` is a live handle; `out` is 768 writable bytes.
+enum Op2fStatus op2f_sprites_palette(const struct Op2fSprites *sprites, size_t index, uint8_t *out);
+
+// The palette image `image` draws with, in `player`'s colours (as in `op2f_sprites_frame`): 768 bytes of RGB into
+// `out`. Index 0 is transparent.
+//
+// # Safety
+// `sprites` is a live handle; `out` is 768 writable bytes.
+enum Op2fStatus op2f_sprites_image_palette(const struct Op2fSprites *sprites,
+                                           size_t image,
+                                           int32_t player,
+                                           uint8_t *out);
+
+// Image `image`'s raw pixels: one palette index per pixel, row by row (shadows: 0 or 1), width * height bytes into
+// `out`, which holds `cap`.
+//
+// # Safety
+// `sprites` is a live handle; `out` is `cap` writable bytes.
+enum Op2fStatus op2f_sprites_image_indices(const struct Op2fSprites *sprites,
+                                           size_t image,
+                                           uint8_t *out,
+                                           size_t cap);
+
+// # Safety
+// `sprites` is a live handle; `out` writable.
+enum Op2fStatus op2f_sprites_frame_info(const struct Op2fSprites *sprites,
+                                        size_t animation,
+                                        size_t frame,
+                                        struct Op2fFrameInfo *out);
+
+// Layer `layer` of a frame (layers draw in order, later on top).
+//
+// # Safety
+// `sprites` is a live handle; `out` writable.
+enum Op2fStatus op2f_sprites_frame_layer(const struct Op2fSprites *sprites,
+                                         size_t animation,
+                                         size_t frame,
+                                         size_t layer,
+                                         struct Op2fLayer *out);
+
+// The bounds of a frame's layers in frame coordinates: min x, min y, max x, max y (max exclusive) into `out`.
+//
+// # Safety
+// `sprites` is a live handle; `out` is 4 writable values.
+enum Op2fStatus op2f_sprites_frame_bounds(const struct Op2fSprites *sprites,
+                                          size_t animation,
+                                          size_t frame,
+                                          int32_t *out);
+
+// The union of every frame's bounds (as `op2f_sprites_frame_bounds`) of an animation.
+//
+// # Safety
+// `sprites` is a live handle; `out` is 4 writable values.
+enum Op2fStatus op2f_sprites_animation_bounds(const struct Op2fSprites *sprites,
+                                              size_t animation,
+                                              int32_t *out);
+
+// Clip rectangle `rect` of an animation (left, top, right, bottom, edges included, in frame coordinates): an image
+// whose type has bits 5-9 set to `k` is drawn only inside rectangle `k` - 1 (a truck sinking into a dock pit).
+//
+// # Safety
+// `sprites` is a live handle; `out` is 4 writable values.
+enum Op2fStatus op2f_sprites_animation_appendix(const struct Op2fSprites *sprites,
+                                                size_t animation,
+                                                size_t rect,
+                                                uint32_t *out);
+
+// Makes an image from RGBA pixels (`width` * `height` * 4 bytes, copied) and a hotspot, e.g. to pass to
+// `op2f_image_overlay` or `op2f_image_shrink`.
+//
+// # Safety
+// `rgba` is `width * height * 4` readable bytes; `out` writable.
+enum Op2fStatus op2f_image_new(uint32_t width,
+                               uint32_t height,
+                               const uint8_t *rgba,
+                               int32_t hotspot_x,
+                               int32_t hotspot_y,
+                               struct Op2fImage **out);
+
+// Box-filters an image down by `factor` (1 or more: each output pixel averages a factor x factor block); the
+// hotspot is divided too.
+//
+// # Safety
+// `image` is a live handle; `out` writable.
+enum Op2fStatus op2f_image_shrink(const struct Op2fImage *image,
+                                  uint32_t factor,
+                                  struct Op2fImage **out);
+
+// The mip chain of an image for a GPU texture: the image itself, then halves down to 1x1. Writes the new images
+// (each freed with `op2f_image_free`) to `out`, which holds `cap`, and their number to `*count`. A chain longer than
+// `cap` writes nothing and gives `OP2F_STATUS_BUFFER_TOO_SMALL`; a NULL `out` with `cap` 0 asks for the length.
+//
+// # Safety
+// `image` is a live handle; `out` is NULL or `cap` writable pointers; `count` writable.
+enum Op2fStatus op2f_image_mip_chain(const struct Op2fImage *image,
+                                     struct Op2fImage **out,
+                                     size_t cap,
+                                     size_t *count);
+
+// Draws `top` over `bottom` with `top`'s hotspot placed at `bottom`'s hotspot plus (`x`, `y`): how a turret sits
+// on its chassis (`op2f_turret_offset`). The canvas grows to fit both; the result's hotspot is `bottom`'s point.
+//
+// # Safety
+// `bottom` and `top` are live handles; `out` writable.
+enum Op2fStatus op2f_image_overlay(const struct Op2fImage *bottom,
+                                   const struct Op2fImage *top,
+                                   int32_t x,
+                                   int32_t y,
+                                   struct Op2fImage **out);
+
+// # Safety
+// `list` is NULL or a live handle, not used afterwards.
+void op2f_string_list_free(struct Op2fStringList *list);
+
+// # Safety
+// `list` is NULL or a live handle.
+size_t op2f_string_list_count(const struct Op2fStringList *list);
+
+// # Safety
+// `list` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_string_list_get(const struct Op2fStringList *list,
+                                     size_t index,
+                                     char *buf,
+                                     size_t cap,
+                                     size_t *len);
+
+// # Safety
+// `table` is NULL or a live handle, not used afterwards.
+void op2f_string_table_free(struct Op2fStringTable *table);
+
+// # Safety
+// `table` is NULL or a live handle.
+size_t op2f_string_table_count(const struct Op2fStringTable *table);
+
+// The id and text of string `index` (0 to count - 1, in id order); `id` may be NULL.
+//
+// # Safety
+// `table` is a live handle; `id` NULL or writable; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_string_table_entry(const struct Op2fStringTable *table,
+                                        size_t index,
+                                        uint32_t *id,
+                                        char *buf,
+                                        size_t cap,
+                                        size_t *len);
+
+// The text of the string with id `id`; `OP2F_STATUS_NOT_FOUND` when there's none.
+//
+// # Safety
+// `table` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_string_table_find(const struct Op2fStringTable *table,
+                                       uint32_t id,
+                                       char *buf,
+                                       size_t cap,
+                                       size_t *len);
+
+// # Safety
+// `pairs` is NULL or a live handle, not used afterwards.
+void op2f_string_pairs_free(struct Op2fStringPairs *pairs);
+
+// # Safety
+// `pairs` is NULL or a live handle.
+size_t op2f_string_pairs_count(const struct Op2fStringPairs *pairs);
+
+// The key of pair `index`.
+//
+// # Safety
+// `pairs` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_string_pairs_key(const struct Op2fStringPairs *pairs,
+                                      size_t index,
+                                      char *buf,
+                                      size_t cap,
+                                      size_t *len);
+
+// The value of pair `index`.
+//
+// # Safety
+// `pairs` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_string_pairs_value(const struct Op2fStringPairs *pairs,
+                                        size_t index,
+                                        char *buf,
+                                        size_t cap,
+                                        size_t *len);
+
+// Opens the game folder's `Outpost2.exe`.
+//
+// # Safety
+// `game` is a live handle; `out` writable.
+enum Op2fStatus op2f_exe_open(const struct Op2fGame *game, struct Op2fExe **out);
+
+// Reads a PE executable from memory (the bytes are copied).
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_exe_parse(const uint8_t *data, size_t len, struct Op2fExe **out);
+
+// # Safety
+// `exe` is NULL or a live handle, not used afterwards.
+void op2f_exe_free(struct Op2fExe *exe);
+
+// The image base virtual addresses start from (0x400000 for Outpost2.exe).
+//
+// # Safety
+// `exe` is NULL or a live handle.
+uint32_t op2f_exe_image_base(const struct Op2fExe *exe);
+
+// The 32-bit value at virtual address `va`; `OP2F_STATUS_OUT_OF_RANGE` outside the file's sections.
+//
+// # Safety
+// `exe` is a live handle; `out` writable.
+enum Op2fStatus op2f_exe_u32(const struct Op2fExe *exe, uint32_t va, uint32_t *out);
+
+// The NUL-terminated string (up to 255 bytes) at virtual address `va`.
+//
+// # Safety
+// `exe` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_exe_cstr(const struct Op2fExe *exe,
+                              uint32_t va,
+                              char *buf,
+                              size_t cap,
+                              size_t *len);
+
+// The sound file of every SoundID: `OP2F_SOUND_COUNT` names such as "laser.wav", from Outpost2.exe 1.2's table
+// (another version gives `OP2F_STATUS_INVALID_DATA`).
+//
+// # Safety
+// `exe` is a live handle; `out` writable.
+enum Op2fStatus op2f_exe_sound_files(const struct Op2fExe *exe,
+                                     struct Op2fStringList **out);
+
+// The structures' ambient animation sequence: `OP2F_AMBIENT_ROWS` rows of 5 bytes into `out`, each a delay and then
+// the slot offset for ambient columns 1 to 4, between 0xFF-headed rows at both ends.
+//
+// # Safety
+// `exe` is a live handle; `out` is `OP2F_AMBIENT_ROWS * 5` writable bytes.
+enum Op2fStatus op2f_exe_ambient_sequence(const struct Op2fExe *exe,
+                                          uint8_t *out);
+
+// The tube and wall graphic for each set of connections: 16 bytes into `out`, indexed by a mask of the neighbours
+// (north 1, south 2, west 4, east 8), each a position in the terrain type's group of 16 graphics.
+//
+// # Safety
+// `exe` is a live handle; `out` is 16 writable bytes.
+enum Op2fStatus op2f_exe_tube_graphics(const struct Op2fExe *exe,
+                                       uint8_t *out);
+
+// How long the game's Savant voice queue waits for each sound in `names` (as `op2f_exe_sound_files` gives them),
+// in ms: one value per name into `out`, which holds `count`; 0 for a file that can't be read.
+//
+// # Safety
+// `game` and `names` are live handles; `out` is `count` writable values.
+enum Op2fStatus op2f_sound_lengths(const struct Op2fGame *game,
+                                   const struct Op2fStringList *names,
+                                   uint32_t *out,
+                                   size_t count);
+
+// How long the Savant queue waits for a sound with `data_len` bytes of samples, in ms (as for 22 kHz 8-bit mono).
+uint32_t op2f_savant_ms(size_t data_len);
 
 // Opens an Outpost 2 folder. With `dir` NULL: `$OP2_DIR`, else the first complete install found in the usual
 // places (GOG, Steam, registry). Files are looked up the way OPU layers them: `OPU/base`, `OPU/maps`, the folder
@@ -232,6 +1074,319 @@ enum Op2fStatus op2f_game_map_name(const struct Op2fGame *game,
                                    char *buf,
                                    size_t cap,
                                    size_t *len);
+
+// The loose file `name` resolves to (OPU's overrides first), for files too big to read whole, like `op2.clm`;
+// `OP2F_STATUS_NOT_FOUND` when it is only in a `.vol` archive, or nowhere.
+//
+// # Safety
+// `game` is a live handle; `name` a string; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_game_loose_path(const struct Op2fGame *game,
+                                     const char *name,
+                                     char *buf,
+                                     size_t cap,
+                                     size_t *len);
+
+// The `.vol` archives in the game folder, in the order they are searched (open one with `op2f_vol_open`).
+//
+// # Safety
+// `game` is a live handle; `out` writable.
+enum Op2fStatus op2f_game_vols(const struct Op2fGame *game,
+                               struct Op2fStringList **out);
+
+// The file `name` in `dir` itself (no OPU overrides), matched case-insensitively as Windows would.
+//
+// # Safety
+// `dir` and `name` are strings; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_find_in_dir(const char *dir,
+                                 const char *name,
+                                 char *buf,
+                                 size_t cap,
+                                 size_t *len);
+
+// Sets the game folder `op2f_game_open(NULL, ...)` and `op2f_default_game_dir` use for the rest of the process.
+//
+// # Safety
+// `dir` is a string.
+enum Op2fStatus op2f_set_game_dir(const char *dir);
+
+// The game folder `op2f_game_open(NULL, ...)` opens: the one given to `op2f_set_game_dir`, else `$OP2_DIR`, else
+// the first complete install found in the usual places; with none, a path that doesn't exist.
+//
+// # Safety
+// `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_default_game_dir(char *buf,
+                                      size_t cap,
+                                      size_t *len);
+
+// Checks a folder for the game's files. With `chosen`, a folder the player picked is also searched one level down
+// (and inside a Wine prefix) for the game.
+//
+// # Safety
+// `dir` is a string; `out` writable.
+enum Op2fStatus op2f_install_check(const char *dir,
+                                   bool chosen,
+                                   struct Op2fInstallCheck **out);
+
+// # Safety
+// `check` is NULL or a live handle, not used afterwards.
+void op2f_install_check_free(struct Op2fInstallCheck *check);
+
+// Whether the folder has every file the game needs.
+//
+// # Safety
+// `check` is NULL or a live handle.
+bool op2f_install_check_ok(const struct Op2fInstallCheck *check);
+
+// # Safety
+// `check` is a live handle; `out` writable.
+enum Op2fStatus op2f_install_check_release(const struct Op2fInstallCheck *check,
+                                           enum Op2fRelease *out);
+
+// Whether `Outpost2.exe` is byte-identical to GOG's 1.2: 1 yes, 0 no, -1 no `Outpost2.exe`.
+//
+// # Safety
+// `check` is NULL or a live handle.
+int32_t op2f_install_check_exe_is_gog(const struct Op2fInstallCheck *check);
+
+// # Safety
+// `check` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_install_check_text(const struct Op2fInstallCheck *check,
+                                        enum Op2fInstallText field,
+                                        char *buf,
+                                        size_t cap,
+                                        size_t *len);
+
+// # Safety
+// `check` is a live handle; `out` writable.
+enum Op2fStatus op2f_install_check_list(const struct Op2fInstallCheck *check,
+                                        enum Op2fInstallList field,
+                                        struct Op2fStringList **out);
+
+// Searches the usual places (GOG, Steam, the CD's default folder, Wine and Proton prefixes, the registry) for
+// installs.
+//
+// # Safety
+// `out` is writable.
+enum Op2fStatus op2f_install_search(struct Op2fInstallSearch **out);
+
+// # Safety
+// `search` is NULL or a live handle, not used afterwards.
+void op2f_install_search_free(struct Op2fInstallSearch *search);
+
+// Number of places searched.
+//
+// # Safety
+// `search` is NULL or a live handle.
+size_t op2f_install_search_searched_count(const struct Op2fInstallSearch *search);
+
+// Searched place `index`: its folder into `buf` and, when `origin` isn't NULL, why it was looked at into `origin`
+// (which holds `origin_cap` bytes; truncated if needed).
+//
+// # Safety
+// `search` is a live handle; the buffers as in the string convention.
+enum Op2fStatus op2f_install_search_searched(const struct Op2fInstallSearch *search,
+                                             size_t index,
+                                             char *buf,
+                                             size_t cap,
+                                             size_t *len,
+                                             char *origin,
+                                             size_t origin_cap);
+
+// Number of game folders found, complete or not.
+//
+// # Safety
+// `search` is NULL or a live handle.
+size_t op2f_install_search_found_count(const struct Op2fInstallSearch *search);
+
+// The check of found folder `index` (a new handle).
+//
+// # Safety
+// `search` is a live handle; `out` writable.
+enum Op2fStatus op2f_install_search_found(const struct Op2fInstallSearch *search,
+                                          size_t index,
+                                          struct Op2fInstallCheck **out);
+
+// The index of the first complete install found; `OP2F_STATUS_NOT_FOUND` when there's none.
+//
+// # Safety
+// `search` is a live handle; `index` writable.
+enum Op2fStatus op2f_install_search_best(const struct Op2fInstallSearch *search, size_t *index);
+
+// Uses `dir` as the data folder for the rest of the process, instead of the platform's.
+//
+// # Safety
+// `dir` is a string.
+enum Op2fStatus op2f_set_data_dir(const char *dir);
+
+// # Safety
+// `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_data_dir(enum Op2fDataDir which, char *buf, size_t cap, size_t *len);
+
+// The OPU folder layered over a game folder: the game's own `OPU`, or the one installed in the data folder.
+//
+// # Safety
+// `game_dir` is a string; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opu_dir(const char *game_dir,
+                             char *buf,
+                             size_t cap,
+                             size_t *len);
+
+// Opens an installer by path. Errors say what's wrong in words a player can act on.
+//
+// # Safety
+// `path` is a string; `out` writable.
+enum Op2fStatus op2f_inno_open(const char *path, struct Op2fInnoInstaller **out);
+
+// # Safety
+// `inst` is NULL or a live handle, not used afterwards.
+void op2f_inno_free(struct Op2fInnoInstaller *inst);
+
+// # Safety
+// `inst` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_inno_text(const struct Op2fInnoInstaller *inst,
+                               enum Op2fInnoText field,
+                               char *buf,
+                               size_t cap,
+                               size_t *len);
+
+// The files the installer puts in the game folder: paths relative to it, with `/` separators.
+//
+// # Safety
+// `inst` is a live handle; `out` writable.
+enum Op2fStatus op2f_inno_files(const struct Op2fInnoInstaller *inst, struct Op2fStringList **out);
+
+// File `index`'s size in bytes (in `op2f_inno_files`' order).
+//
+// # Safety
+// `inst` is a live handle; `out` writable.
+enum Op2fStatus op2f_inno_file_size(const struct Op2fInnoInstaller *inst,
+                                    size_t index,
+                                    uint64_t *out);
+
+// Total bytes an extraction writes.
+//
+// # Safety
+// `inst` is NULL or a live handle.
+uint64_t op2f_inno_total_size(const struct Op2fInnoInstaller *inst);
+
+// Extracts the game folder into `dir` (created if needed), checking every file against the installer's checksums.
+// `progress` (may be NULL) gets stage 0 and (bytes written, total) as it goes; `out` (may be NULL) what was written.
+//
+// # Safety
+// `inst` is a live handle; `dir` a string; `progress` NULL or a function taking `user`; `out` NULL or writable.
+enum Op2fStatus op2f_inno_extract(const struct Op2fInnoInstaller *inst,
+                                  const char *dir,
+                                  Op2fProgress progress,
+                                  void *user,
+                                  struct Op2fExtracted *out);
+
+// Extracts GOG's installer at `installer` into `target` and checks the result, as op2-rs's setup does: through
+// `<target>.partial`, renamed into place only when complete. `target` must be empty or absent, or be the data
+// folder's extract folder (`op2f_data_dir`), which is replaced. `progress` gets stage 0 and bytes.
+//
+// # Safety
+// `installer` and `target` are strings; `progress` NULL or a function taking `user`; `out` writable.
+enum Op2fStatus op2f_inno_extract_game(const char *installer,
+                                       const char *target,
+                                       Op2fProgress progress,
+                                       void *user,
+                                       struct Op2fInstallCheck **out);
+
+// A fact about the OPU release, as a static string.
+const char *op2f_opu_text(enum Op2fOpuText field);
+
+// The size of OPU's installer, in bytes.
+uint64_t op2f_opu_package_size(void);
+
+// Checks that bytes are OPU's official installer (size and SHA-256).
+//
+// # Safety
+// `data` is `len` readable bytes.
+enum Op2fStatus op2f_opu_verify_package(const uint8_t *data, size_t len);
+
+// An OPU folder in or under `dir` (one already unpacked by the player); `OP2F_STATUS_NOT_FOUND` when there's none.
+//
+// # Safety
+// `dir` is a string; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opu_find_folder(const char *dir,
+                                     char *buf,
+                                     size_t cap,
+                                     size_t *len);
+
+// Installs OPU from its installer (`package`, or an unpacked OPU folder) for the game at `game_dir` into `target`
+// (e.g. `op2f_data_dir(OP2F_DATA_DIR_OPU)`). The game folder isn't changed. `progress` gets an `Op2fOpuStage`.
+//
+// # Safety
+// The paths are strings; `progress` NULL or a function taking `user`; `out` writable.
+enum Op2fStatus op2f_opu_install(const char *package,
+                                 const char *game_dir,
+                                 const char *target,
+                                 Op2fProgress progress,
+                                 void *user,
+                                 struct Op2fOpuInstalled **out);
+
+// # Safety
+// `installed` is NULL or a live handle, not used afterwards.
+void op2f_opu_installed_free(struct Op2fOpuInstalled *installed);
+
+// Where OPU was installed and, when `files` isn't NULL, how many files were written.
+//
+// # Safety
+// `installed` is a live handle; `files` NULL or writable; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opu_installed_dir(const struct Op2fOpuInstalled *installed,
+                                       size_t *files,
+                                       char *buf,
+                                       size_t cap,
+                                       size_t *len);
+
+// Things worth telling the player about the install (it still works).
+//
+// # Safety
+// `installed` is a live handle; `out` writable.
+enum Op2fStatus op2f_opu_installed_warnings(const struct Op2fOpuInstalled *installed,
+                                            struct Op2fStringList **out);
+
+// A digest of every file under `dir` (names and contents), to tell whether an OPU install changed.
+//
+// # Safety
+// `dir` is a string; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opu_tree_digest(const char *dir, char *buf, size_t cap, size_t *len);
+
+// Downloads OPU's official installer from outpost2.net into `dir`, checking its SHA-256, and gives its path. Only
+// with the `fetch-opu` feature. `progress` gets `OP2F_OPU_STAGE_DOWNLOAD` and bytes.
+//
+// # Safety
+// `dir` is a string; `progress` NULL or a function taking `user`; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opu_download(const char *dir,
+                                  Op2fProgress progress,
+                                  void *user,
+                                  char *buf,
+                                  size_t cap,
+                                  size_t *len);
+
+// Reads an NSIS installer from memory.
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_nsis_parse(const uint8_t *data, size_t len, struct Op2fNsis **out);
+
+// # Safety
+// `nsis` is NULL or a live handle, not used afterwards.
+void op2f_nsis_free(struct Op2fNsis *nsis);
+
+// Where each file the install script extracts goes, in script order, with variables as `$NAME` and `\`
+// separators (e.g. `$INSTDIR\OPU\README.md`).
+//
+// # Safety
+// `nsis` is a live handle; `out` writable.
+enum Op2fStatus op2f_nsis_files(const struct Op2fNsis *nsis,
+                                struct Op2fStringList **out);
+
+// The contents of file `index` (in `op2f_nsis_files`' order).
+//
+// # Safety
+// `nsis` is a live handle; `out` writable.
+enum Op2fStatus op2f_nsis_read(const struct Op2fNsis *nsis, size_t index, struct Op2fBytes **out);
 
 // Reads and parses a map from the game (e.g. "cm01.map").
 //
@@ -369,6 +1524,516 @@ enum Op2fStatus op2f_tileset_tile_rgba(const struct Op2fTileset *tileset,
                                        uint8_t *out,
                                        size_t cap);
 
+// Opens a `.vol` archive by path. Entries are read from the file when asked for.
+//
+// # Safety
+// `path` is a string; `out` writable.
+enum Op2fStatus op2f_vol_open(const char *path, struct Op2fVol **out);
+
+// Parses a `.vol` archive from memory (the bytes are copied).
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_vol_parse(const uint8_t *data, size_t len, struct Op2fVol **out);
+
+// # Safety
+// `vol` is NULL or a live handle, not used afterwards.
+void op2f_vol_free(struct Op2fVol *vol);
+
+// Number of entries.
+//
+// # Safety
+// `vol` is NULL or a live handle.
+size_t op2f_vol_entry_count(const struct Op2fVol *vol);
+
+// Entry `index`'s file name.
+//
+// # Safety
+// `vol` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_vol_entry_name(const struct Op2fVol *vol,
+                                    size_t index,
+                                    char *buf,
+                                    size_t cap,
+                                    size_t *len);
+
+// Finds an entry by file name, ignoring case.
+//
+// # Safety
+// `vol` is a live handle; `name` a string; `index` writable.
+enum Op2fStatus op2f_vol_find(const struct Op2fVol *vol, const char *name, size_t *index);
+
+// Entry `index`'s contents, decompressed.
+//
+// # Safety
+// `vol` is a live handle; `out` writable.
+enum Op2fStatus op2f_vol_read(const struct Op2fVol *vol, size_t index, struct Op2fBytes **out);
+
+// # Safety
+// `vol` is a live handle; `out` writable.
+enum Op2fStatus op2f_vol_entry_info(const struct Op2fVol *vol,
+                                    size_t index,
+                                    struct Op2fVolEntryInfo *out);
+
+// Entry `index`'s bytes as stored (still compressed if it is).
+//
+// # Safety
+// `vol` is a live handle; `out` writable.
+enum Op2fStatus op2f_vol_read_stored(const struct Op2fVol *vol,
+                                     size_t index,
+                                     struct Op2fBytes **out);
+
+// Decompresses LZH data (a `.vol` entry with compression 0x103).
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_lzh_decompress(const uint8_t *data, size_t len, struct Op2fBytes **out);
+
+// Number of tile groups.
+//
+// # Safety
+// `map` is NULL or a live handle.
+size_t op2f_map_tile_group_count(const struct Op2fMap *map);
+
+// Tile group `index`'s size and, into `buf`, its name (some unnamed groups hold stale bytes, read lossily).
+//
+// # Safety
+// `map` is a live handle; `info` writable; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_map_tile_group(const struct Op2fMap *map,
+                                    size_t index,
+                                    struct Op2fTileGroupInfo *info,
+                                    char *buf,
+                                    size_t cap,
+                                    size_t *len);
+
+// Tile group `index`'s mapping indices, row by row (width * height of them), into `out`, which holds `count`.
+//
+// # Safety
+// `map` is a live handle; `out` is `count` writable values.
+enum Op2fStatus op2f_map_tile_group_mappings(const struct Op2fMap *map,
+                                             size_t index,
+                                             uint32_t *out,
+                                             size_t count);
+
+// Number of terrain type records.
+//
+// # Safety
+// `map` is NULL or a live handle.
+size_t op2f_map_terrain_type_count(const struct Op2fMap *map);
+
+// Terrain type record `index` as stored (`OP2F_TERRAIN_TYPE_BYTES` bytes, not decoded) into `out`, which holds `cap`.
+//
+// # Safety
+// `map` is a live handle; `out` is `cap` writable bytes.
+enum Op2fStatus op2f_map_terrain_type(const struct Op2fMap *map,
+                                      size_t index,
+                                      uint8_t *out,
+                                      size_t cap);
+
+// Sets the tile word at (`x`, `y`) (see `Op2fTile::bits`), for editing a map before `op2f_map_write`.
+//
+// # Safety
+// `map` is a live handle not used by another thread meanwhile.
+enum Op2fStatus op2f_map_set_tile_bits(struct Op2fMap *map,
+                                       uint32_t x,
+                                       uint32_t y,
+                                       uint32_t bits);
+
+// The map as a `.map` file. An unchanged map writes back byte for byte.
+//
+// # Safety
+// `map` is a live handle; `out` writable.
+enum Op2fStatus op2f_map_write(const struct Op2fMap *map, struct Op2fBytes **out);
+
+// The speed bucket of a cell type (an `Op2fCellType` value, 0-31).
+enum Op2fSpeed op2f_cell_type_speed(uint8_t cell_type);
+
+// A whole tileset strip as one image, 32 pixels wide and 32 * tile count tall.
+//
+// # Safety
+// `tileset` is a live handle; `out` writable.
+enum Op2fStatus op2f_tileset_image(const struct Op2fTileset *tileset, struct Op2fImage **out);
+
+// Converts the game's PBMP tileset container to a standard Windows BMP file.
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_pbmp_to_bmp(const uint8_t *data, size_t len, struct Op2fBytes **out);
+
+// Loads every tileset `map` names. A tileset that fails to load doesn't fail the call: its tiles draw as missing
+// (magenta and black), and `op2f_map_tilesets_status` says why.
+//
+// # Safety
+// `game` and `map` are live handles; `out` writable.
+enum Op2fStatus op2f_map_tilesets_load(const struct Op2fGame *game,
+                                       const struct Op2fMap *map,
+                                       struct Op2fMapTilesets **out);
+
+// # Safety
+// `tilesets` is NULL or a live handle, not used afterwards.
+void op2f_map_tilesets_free(struct Op2fMapTilesets *tilesets);
+
+// Whether tileset slot `slot` loaded: `OP2F_STATUS_OK`, the load's error (with its message), or
+// `OP2F_STATUS_NOT_FOUND` for an empty slot.
+//
+// # Safety
+// `tilesets` is a live handle.
+enum Op2fStatus op2f_map_tilesets_status(const struct Op2fMapTilesets *tilesets, size_t slot);
+
+// The tile at map position (`x`, `y`) as RGBA (its mapping's first frame): `OP2F_TILE_RGBA_BYTES` into `out`, which
+// holds `cap`. `OP2F_STATUS_NOT_FOUND` when its mapping or tileset is missing.
+//
+// # Safety
+// `tilesets` and `map` are live handles; `out` is `cap` writable bytes.
+enum Op2fStatus op2f_map_tile_rgba(const struct Op2fMapTilesets *tilesets,
+                                   const struct Op2fMap *map,
+                                   uint32_t x,
+                                   uint32_t y,
+                                   uint8_t *out,
+                                   size_t cap);
+
+// Draws the whole map at `px` pixels per tile (1 to 32; each tile box-filtered down), as a minimap or preview.
+//
+// # Safety
+// `map` and `tilesets` are live handles; `out` writable.
+enum Op2fStatus op2f_map_render(const struct Op2fMap *map,
+                                const struct Op2fMapTilesets *tilesets,
+                                uint32_t px,
+                                struct Op2fImage **out);
+
+// Draws tile group `group` at full size; `missing` (when not NULL) receives how many of its cells had no graphic.
+//
+// # Safety
+// `map` and `tilesets` are live handles; `out` writable; `missing` NULL or writable.
+enum Op2fStatus op2f_map_render_tile_group(const struct Op2fMap *map,
+                                           const struct Op2fMapTilesets *tilesets,
+                                           size_t group,
+                                           struct Op2fImage **out,
+                                           size_t *missing);
+
+// The minimap colour of mapping `mapping` (its tile's pixels averaged) as RGBA: 4 bytes into `out`.
+//
+// # Safety
+// `map` and `tilesets` are live handles; `out` is 4 writable bytes.
+enum Op2fStatus op2f_map_mapping_colour(const struct Op2fMap *map,
+                                        const struct Op2fMapTilesets *tilesets,
+                                        uint16_t mapping,
+                                        uint8_t *out);
+
+// # Safety
+// `map` and `tilesets` are live handles; `out` writable.
+enum Op2fStatus op2f_tile_palette_build(const struct Op2fMap *map,
+                                        const struct Op2fMapTilesets *tilesets,
+                                        struct Op2fTilePalette **out);
+
+// # Safety
+// `palette` is NULL or a live handle, not used afterwards.
+void op2f_tile_palette_free(struct Op2fTilePalette *palette);
+
+// Number of layers, `OP2F_TILE_RGBA_BYTES` each.
+//
+// # Safety
+// `palette` is NULL or a live handle.
+uint32_t op2f_tile_palette_layer_count(const struct Op2fTilePalette *palette);
+
+// The layer a tile word draws with.
+//
+// # Safety
+// `palette` is NULL or a live handle.
+uint32_t op2f_tile_palette_layer(const struct Op2fTilePalette *palette, uint32_t tile_bits);
+
+// The RGBA pixels of `count` layers from `first`: `count * OP2F_TILE_RGBA_BYTES` bytes into `out`, which holds `cap`.
+//
+// # Safety
+// `palette` is a live handle; `out` is `cap` writable bytes.
+enum Op2fStatus op2f_tile_palette_layers(const struct Op2fTilePalette *palette,
+                                         uint32_t first,
+                                         uint32_t count,
+                                         uint8_t *out,
+                                         size_t cap);
+
+// A low-resolution image of the whole map (`OP2F_OVERVIEW_TILE` pixels per tile), for zoomed-out views.
+//
+// # Safety
+// `map` and `palette` are live handles; `out` writable.
+enum Op2fStatus op2f_tile_palette_overview(const struct Op2fMap *map,
+                                           const struct Op2fTilePalette *palette,
+                                           struct Op2fImage **out);
+
+// Decodes `virmask.raw` (the Blight's 16 tile masks, its first `OP2F_VIRMASK_BYTES` bytes) into `out`: 16 masks of
+// 32 rows, each row 32 bits with the leftmost pixel in the top bit and a set bit a Blight pixel. Mask `i` is for a
+// tile whose 2x2 block has the Blight on corners `i` (1 the tile, 2 east, 4 south, 8 south-east).
+//
+// # Safety
+// `data` is `len` readable bytes; `out` is 512 writable values.
+enum Op2fStatus op2f_virmask_parse(const uint8_t *data,
+                                   size_t len,
+                                   uint32_t *out);
+
+// Opens a PE file in the game folder by name (e.g. "out2res.dll"), or by path.
+//
+// # Safety
+// `game` is a live handle; `name` a string; `out` writable.
+enum Op2fStatus op2f_resources_open(const struct Op2fGame *game,
+                                    const char *name,
+                                    struct Op2fResources **out);
+
+// Reads the resources of a PE file in memory (the bytes are copied).
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_resources_parse(const uint8_t *data, size_t len, struct Op2fResources **out);
+
+// # Safety
+// `res` is NULL or a live handle, not used afterwards.
+void op2f_resources_free(struct Op2fResources *res);
+
+// Number of resources.
+//
+// # Safety
+// `res` is NULL or a live handle.
+size_t op2f_resources_count(const struct Op2fResources *res);
+
+// # Safety
+// `res` is a live handle; `out` writable.
+enum Op2fStatus op2f_resource_info(const struct Op2fResources *res,
+                                   size_t index,
+                                   struct Op2fResourceInfo *out);
+
+// Resource `index`'s type as text: the standard name for a numeric one ("BITMAP"), the number when it has none,
+// or the type's own name.
+//
+// # Safety
+// `res` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_resource_type(const struct Op2fResources *res,
+                                   size_t index,
+                                   char *buf,
+                                   size_t cap,
+                                   size_t *len);
+
+// Resource `index`'s name as text: its number, or its name.
+//
+// # Safety
+// `res` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_resource_name(const struct Op2fResources *res,
+                                   size_t index,
+                                   char *buf,
+                                   size_t cap,
+                                   size_t *len);
+
+// Resource `index`'s raw bytes.
+//
+// # Safety
+// `res` is a live handle; `out` writable.
+enum Op2fStatus op2f_resource_bytes(const struct Op2fResources *res,
+                                    size_t index,
+                                    struct Op2fBytes **out);
+
+// Finds a resource. `type` is a number, a standard type name ("BITMAP" or "RT_BITMAP") or a type's own name;
+// `name` is a number or a name (names match ignoring case).
+//
+// # Safety
+// `res` is a live handle; `type` and `name` strings; `index` writable.
+enum Op2fStatus op2f_resources_find(const struct Op2fResources *res,
+                                    const char *type,
+                                    const char *name,
+                                    size_t *index);
+
+// Every string in the string tables, by id.
+//
+// # Safety
+// `res` is a live handle; `out` writable.
+enum Op2fStatus op2f_resources_strings(const struct Op2fResources *res,
+                                       struct Op2fStringTable **out);
+
+// A bitmap resource by name (a number or a name).
+//
+// # Safety
+// `res` is a live handle; `name` a string; `out` writable.
+enum Op2fStatus op2f_resources_bitmap(const struct Op2fResources *res,
+                                      const char *name,
+                                      struct Op2fBitmap **out);
+
+// A cursor (`cursor` true: an RT_GROUP_CURSOR name) or icon (an RT_GROUP_ICON name), its largest image, with the
+// cursor's hotspot.
+//
+// # Safety
+// `res` is a live handle; `name` a string; `out` writable.
+enum Op2fStatus op2f_resources_cursor(const struct Op2fResources *res,
+                                      const char *name,
+                                      bool cursor,
+                                      struct Op2fImage **out);
+
+// A dialog template by numeric id.
+//
+// # Safety
+// `res` is a live handle; `out` writable.
+enum Op2fStatus op2f_resources_dialog(const struct Op2fResources *res,
+                                      uint16_t id,
+                                      struct Op2fDialog **out);
+
+// A menu by name (a number or a name).
+//
+// # Safety
+// `res` is a live handle; `name` a string; `out` writable.
+enum Op2fStatus op2f_resources_menu(const struct Op2fResources *res,
+                                    const char *name,
+                                    struct Op2fMenu **out);
+
+// The version resource's strings ("FileVersion", "ProductName", ...).
+//
+// # Safety
+// `res` is a live handle; `out` writable.
+enum Op2fStatus op2f_resources_version(const struct Op2fResources *res,
+                                       struct Op2fStringPairs **out);
+
+// Decodes a DIB: a bitmap resource's bytes, or a `.bmp` file (its 14-byte file header is skipped).
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_bitmap_parse(const uint8_t *data, size_t len, struct Op2fBitmap **out);
+
+// # Safety
+// `bitmap` is NULL or a live handle, not used afterwards.
+void op2f_bitmap_free(struct Op2fBitmap *bitmap);
+
+// # Safety
+// `bitmap` is a live handle; `out` writable.
+enum Op2fStatus op2f_bitmap_info(const struct Op2fBitmap *bitmap, struct Op2fBitmapInfo *out);
+
+// The bitmap as RGBA, top row first.
+//
+// # Safety
+// `bitmap` is a live handle; `out` writable.
+enum Op2fStatus op2f_bitmap_image(const struct Op2fBitmap *bitmap, struct Op2fImage **out);
+
+// The palette as RGB: `palette_count * 3` bytes into `out`, which holds `cap`.
+//
+// # Safety
+// `bitmap` is a live handle; `out` is `cap` writable bytes.
+enum Op2fStatus op2f_bitmap_palette(const struct Op2fBitmap *bitmap, uint8_t *out, size_t cap);
+
+// The palette indices (bitmaps of 8 bits or fewer per pixel), one byte per pixel, top row first: width * height
+// bytes into `out`, which holds `cap`; `OP2F_STATUS_NOT_FOUND` for a true-colour bitmap.
+//
+// # Safety
+// `bitmap` is a live handle; `out` is `cap` writable bytes.
+enum Op2fStatus op2f_bitmap_indices(const struct Op2fBitmap *bitmap,
+                                    uint8_t *out,
+                                    size_t cap);
+
+// A `.cur` or `.ico` file: its first image, with the cursor's hotspot.
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_cursor_parse(const uint8_t *data, size_t len, struct Op2fImage **out);
+
+// Parses an animated cursor (`.ani`).
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_ani_cursor_parse(const uint8_t *data, size_t len, struct Op2fAniCursor **out);
+
+// # Safety
+// `ani` is NULL or a live handle, not used afterwards.
+void op2f_ani_cursor_free(struct Op2fAniCursor *ani);
+
+// Number of distinct frame images.
+//
+// # Safety
+// `ani` is NULL or a live handle.
+size_t op2f_ani_cursor_frame_count(const struct Op2fAniCursor *ani);
+
+// Frame image `frame`, with its hotspot.
+//
+// # Safety
+// `ani` is a live handle; `out` writable.
+enum Op2fStatus op2f_ani_cursor_frame(const struct Op2fAniCursor *ani,
+                                      size_t frame,
+                                      struct Op2fImage **out);
+
+// Number of animation steps (each shows one frame for a time).
+//
+// # Safety
+// `ani` is NULL or a live handle.
+size_t op2f_ani_cursor_step_count(const struct Op2fAniCursor *ani);
+
+// Step `step`: which frame it shows and for how long, in jiffies (1/60 s).
+//
+// # Safety
+// `ani` is a live handle; `frame` and `jiffies` writable.
+enum Op2fStatus op2f_ani_cursor_step(const struct Op2fAniCursor *ani,
+                                     size_t step,
+                                     size_t *frame,
+                                     uint32_t *jiffies);
+
+// The cursor's title; `OP2F_STATUS_NOT_FOUND` without one.
+//
+// # Safety
+// `ani` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_ani_cursor_title(const struct Op2fAniCursor *ani,
+                                      char *buf,
+                                      size_t cap,
+                                      size_t *len);
+
+// # Safety
+// `dialog` is NULL or a live handle, not used afterwards.
+void op2f_dialog_free(struct Op2fDialog *dialog);
+
+// # Safety
+// `dialog` is a live handle; `out` writable.
+enum Op2fStatus op2f_dialog_info(const struct Op2fDialog *dialog, struct Op2fDialogInfo *out);
+
+// # Safety
+// `dialog` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_dialog_text(const struct Op2fDialog *dialog,
+                                 enum Op2fDialogText field,
+                                 char *buf,
+                                 size_t cap,
+                                 size_t *len);
+
+// Control `control`'s id, style and frame.
+//
+// # Safety
+// `dialog` is a live handle; `out` writable.
+enum Op2fStatus op2f_dialog_control(const struct Op2fDialog *dialog,
+                                    size_t control,
+                                    struct Op2fDialogControl *out);
+
+// Control `control`'s window class ("BUTTON", "EDIT", "STATIC", ... or a registered class name) and, when `text`
+// isn't NULL, its text (or "#id" for a resource id) into `text`, which holds `text_cap`.
+//
+// # Safety
+// `dialog` is a live handle; the buffers as in the string convention.
+enum Op2fStatus op2f_dialog_control_class(const struct Op2fDialog *dialog,
+                                          size_t control,
+                                          char *buf,
+                                          size_t cap,
+                                          size_t *len,
+                                          char *text,
+                                          size_t text_cap);
+
+// # Safety
+// `menu` is NULL or a live handle, not used afterwards.
+void op2f_menu_free(struct Op2fMenu *menu);
+
+// Number of items, in order, submenus flattened after their popup item.
+//
+// # Safety
+// `menu` is NULL or a live handle.
+size_t op2f_menu_item_count(const struct Op2fMenu *menu);
+
+// Item `index`: its depth (0 top level) and command id (0 for a popup) and its text.
+//
+// # Safety
+// `menu` is a live handle; `depth` and `id` NULL or writable; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_menu_item(const struct Op2fMenu *menu,
+                               size_t index,
+                               size_t *depth,
+                               uint16_t *id,
+                               char *buf,
+                               size_t cap,
+                               size_t *len);
+
 // Reads a tab-separated sheet from the game (e.g. "vehicles.txt"); OPU's edited copies win over the stock ones,
 // as in the game.
 //
@@ -432,6 +2097,84 @@ enum Op2fStatus op2f_sheet_cell(const struct Op2fSheet *sheet,
 // # Safety
 // `sheet` is a live handle; `code` a string; `row` writable.
 enum Op2fStatus op2f_sheet_find_row(const struct Op2fSheet *sheet, const char *code, size_t *row);
+
+// Opens the game's `op2.clm` (OPU's copy first).
+//
+// # Safety
+// `game` is a live handle; `out` writable.
+enum Op2fStatus op2f_clm_open(const struct Op2fGame *game, struct Op2fClm **out);
+
+// Opens a `.clm` file by path.
+//
+// # Safety
+// `path` is a string; `out` writable.
+enum Op2fStatus op2f_clm_open_file(const char *path, struct Op2fClm **out);
+
+// Parses a whole `.clm` from memory (the bytes are copied).
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_clm_parse(const uint8_t *data, size_t len, struct Op2fClm **out);
+
+// # Safety
+// `clm` is NULL or a live handle, not used afterwards.
+void op2f_clm_free(struct Op2fClm *clm);
+
+// The format every track shares.
+//
+// # Safety
+// `clm` is a live handle; `out` writable.
+enum Op2fStatus op2f_clm_format(const struct Op2fClm *clm, struct Op2fWaveFormat *out);
+
+// Number of tracks.
+//
+// # Safety
+// `clm` is NULL or a live handle.
+size_t op2f_clm_track_count(const struct Op2fClm *clm);
+
+// Track `index`'s name (up to 8 characters, e.g. "op2_01") and, when `bytes` isn't NULL, its size in bytes.
+//
+// # Safety
+// `clm` is a live handle; `bytes` NULL or writable; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_clm_track(const struct Op2fClm *clm,
+                               size_t index,
+                               uint32_t *bytes,
+                               char *buf,
+                               size_t cap,
+                               size_t *len);
+
+// Finds a track by name, ignoring case.
+//
+// # Safety
+// `clm` is a live handle; `name` a string; `index` writable.
+enum Op2fStatus op2f_clm_find(const struct Op2fClm *clm, const char *name, size_t *index);
+
+// Track `index`'s raw PCM samples, in `op2f_clm_format`'s format.
+//
+// # Safety
+// `clm` is a live handle; `out` writable.
+enum Op2fStatus op2f_clm_samples(const struct Op2fClm *clm, size_t index, struct Op2fBytes **out);
+
+// Track `index` as a standalone `.wav` file.
+//
+// # Safety
+// `clm` is a live handle; `out` writable.
+enum Op2fStatus op2f_clm_wav(const struct Op2fClm *clm, size_t index, struct Op2fBytes **out);
+
+// A `.wav` file's format and, into `*data_len`, how many bytes of samples it has.
+//
+// # Safety
+// `data` is `len` readable bytes; `format` and `data_len` writable.
+enum Op2fStatus op2f_wav_info(const uint8_t *data,
+                              size_t len,
+                              struct Op2fWaveFormat *format,
+                              size_t *data_len);
+
+// How long `bytes` of sample data play in `format`, in seconds.
+//
+// # Safety
+// `format` is readable.
+double op2f_wave_seconds(const struct Op2fWaveFormat *format, size_t bytes);
 
 // Loads the game's sprites (`op2_art.prt`, `OP2_ART.BMP` and, when present, `color.bmp`).
 //
@@ -539,83 +2282,386 @@ enum Op2fStatus op2f_sprites_tank(const struct Op2fSprites *sprites,
                                   int32_t player,
                                   struct Op2fImage **out);
 
-// # Safety
-// `image` is NULL or a live handle, not used afterwards.
-void op2f_image_free(struct Op2fImage *image);
+// The armor value the game derives from a sheet armor class (0-5), e.g. class 1 = 180, 5 = 40; 256 means none.
+uint32_t op2f_armor_value(uint32_t armor_class);
 
-// Width in pixels.
+// Loads `vehicles.txt`, `weapons.txt`, `building.txt`, `space.txt`, `mines.txt` and `morale.txt`.
 //
 // # Safety
-// `image` is NULL or a live handle.
-uint32_t op2f_image_width(const struct Op2fImage *image);
+// `game` is a live handle; `out` writable.
+enum Op2fStatus op2f_rules_load(const struct Op2fGame *game, struct Op2fRules **out);
 
-// Height in pixels.
+// # Safety
+// `rules` is NULL or a live handle, not used afterwards.
+void op2f_rules_free(struct Op2fRules *rules);
+
+// Number of rows in a table.
 //
 // # Safety
-// `image` is NULL or a live handle.
-uint32_t op2f_image_height(const struct Op2fImage *image);
+// `rules` is NULL or a live handle.
+size_t op2f_rules_count(const struct Op2fRules *rules, enum Op2fRulesTable table);
 
-// The pixel that sits on the object's map position: draw the image with its top-left corner at the object's pixel
-// position minus the hotspot.
+// Finds a row by its code name (for mines, its yield class), ignoring case.
 //
 // # Safety
-// `image` is NULL or a live handle.
-int32_t op2f_image_hotspot_x(const struct Op2fImage *image);
+// `rules` is a live handle; `code` a string; `row` writable.
+enum Op2fStatus op2f_rules_find(const struct Op2fRules *rules,
+                                enum Op2fRulesTable table,
+                                const char *code,
+                                size_t *row);
 
-// # Safety
-// `image` is NULL or a live handle.
-int32_t op2f_image_hotspot_y(const struct Op2fImage *image);
-
-// The pixels, RGBA with straight (not premultiplied) alpha, row by row: width * height * 4 bytes, valid until the
-// image is freed. NULL for an empty image.
+// Row `row` of `vehicles.txt`.
 //
 // # Safety
-// `image` is NULL or a live handle.
-const uint8_t *op2f_image_rgba(const struct Op2fImage *image);
+// `rules` is a live handle; `out` writable.
+enum Op2fStatus op2f_rules_vehicle(const struct Op2fRules *rules,
+                                   size_t row,
+                                   struct Op2fVehicleStats *out);
 
-// Opens a `.vol` archive by path. Entries are read from the file when asked for.
+// Row `row` of `weapons.txt`.
 //
 // # Safety
-// `path` is a string; `out` writable.
-enum Op2fStatus op2f_vol_open(const char *path, struct Op2fVol **out);
+// `rules` is a live handle; `out` writable.
+enum Op2fStatus op2f_rules_weapon(const struct Op2fRules *rules,
+                                  size_t row,
+                                  struct Op2fWeaponStats *out);
 
-// Parses a `.vol` archive from memory (the bytes are copied).
+// Row `row` of `building.txt`.
+//
+// # Safety
+// `rules` is a live handle; `out` writable.
+enum Op2fStatus op2f_rules_building(const struct Op2fRules *rules,
+                                    size_t row,
+                                    struct Op2fBuildingStats *out);
+
+// Row `row` of `space.txt`.
+//
+// # Safety
+// `rules` is a live handle; `out` writable.
+enum Op2fStatus op2f_rules_space(const struct Op2fRules *rules,
+                                 size_t row,
+                                 struct Op2fSpaceStats *out);
+
+// Row `row` of `mines.txt`.
+//
+// # Safety
+// `rules` is a live handle; `out` writable.
+enum Op2fStatus op2f_rules_mine(const struct Op2fRules *rules,
+                                size_t row,
+                                struct Op2fMineYield *out);
+
+// `morale.txt` as a keyed sheet (see `op2f_sheet_parse_keyed`).
+//
+// # Safety
+// `rules` is a live handle; `out` writable.
+enum Op2fStatus op2f_rules_morale(const struct Op2fRules *rules, struct Op2fSheet **out);
+
+// Where each sheet was read from, by file name (e.g. "vehicles.txt" -> a path, or "sheets.vol:vehicles.txt").
+//
+// # Safety
+// `rules` is a live handle; `out` writable.
+enum Op2fStatus op2f_rules_sources(const struct Op2fRules *rules,
+                                   struct Op2fStringPairs **out);
+
+// Parses a keyed sheet like `morale.txt` (rows of a name and its values, in sections separated by blank lines):
+// every named row, sorted by name, with column 0 the name and the non-empty values after it. It has no columns.
 //
 // # Safety
 // `data` is `len` readable bytes; `out` writable.
-enum Op2fStatus op2f_vol_parse(const uint8_t *data, size_t len, struct Op2fVol **out);
+enum Op2fStatus op2f_sheet_parse_keyed(const uint8_t *data,
+                                       size_t len,
+                                       struct Op2fSheet **out);
 
-// # Safety
-// `vol` is NULL or a live handle, not used afterwards.
-void op2f_vol_free(struct Op2fVol *vol);
-
-// Number of entries.
+// Reads a keyed sheet from the game (e.g. "morale.txt"); see `op2f_sheet_parse_keyed`.
 //
 // # Safety
-// `vol` is NULL or a live handle.
-size_t op2f_vol_entry_count(const struct Op2fVol *vol);
+// `game` is a live handle; `name` a string; `out` writable.
+enum Op2fStatus op2f_sheet_open_keyed(const struct Op2fGame *game,
+                                      const char *name,
+                                      struct Op2fSheet **out);
 
-// Entry `index`'s file name.
+// The tech tree files a game has, by name.
+size_t op2f_tech_file_count(void);
+
+// Tech tree file name `index` as a static string, e.g. "edentek.txt"; NULL when out of range.
+const char *op2f_tech_file_name(size_t index);
+
+// Reads and parses a tech tree from the game.
 //
 // # Safety
-// `vol` is a live handle; `buf` and `len` as in the string convention.
-enum Op2fStatus op2f_vol_entry_name(const struct Op2fVol *vol,
+// `game` is a live handle; `name` a string; `out` writable.
+enum Op2fStatus op2f_tech_tree_open(const struct Op2fGame *game,
+                                    const char *name,
+                                    struct Op2fTechTree **out);
+
+// Parses a tech tree from memory (Windows-1252 text).
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_tech_tree_parse(const uint8_t *data, size_t len, struct Op2fTechTree **out);
+
+// # Safety
+// `tree` is NULL or a live handle, not used afterwards.
+void op2f_tech_tree_free(struct Op2fTechTree *tree);
+
+// Number of research topics, in file order.
+//
+// # Safety
+// `tree` is NULL or a live handle.
+size_t op2f_tech_count(const struct Op2fTechTree *tree);
+
+// Finds a topic by its id.
+//
+// # Safety
+// `tree` is a live handle; `index` writable.
+enum Op2fStatus op2f_tech_find(const struct Op2fTechTree *tree, uint32_t id, size_t *index);
+
+// # Safety
+// `tree` is a live handle; `out` writable.
+enum Op2fStatus op2f_tech_info(const struct Op2fTechTree *tree,
+                               size_t index,
+                               struct Op2fTechInfo *out);
+
+// # Safety
+// `tree` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_tech_text(const struct Op2fTechTree *tree,
+                               size_t index,
+                               enum Op2fTechText field,
+                               char *buf,
+                               size_t cap,
+                               size_t *len);
+
+// The ids of the topics this one requires (`requires_count` of them) into `out`, which holds `count`.
+//
+// # Safety
+// `tree` is a live handle; `out` is `count` writable values.
+enum Op2fStatus op2f_tech_requires(const struct Op2fTechTree *tree,
+                                   size_t index,
+                                   uint32_t *out,
+                                   size_t count);
+
+// Stat change `prop` (0 to `unit_prop_count` - 1) of topic `index`.
+//
+// # Safety
+// `tree` is a live handle; `out` writable.
+enum Op2fStatus op2f_tech_unit_prop(const struct Op2fTechTree *tree,
                                     size_t index,
-                                    char *buf,
-                                    size_t cap,
-                                    size_t *len);
+                                    size_t prop,
+                                    struct Op2fTechUnitProp *out);
 
-// Finds an entry by file name, ignoring case.
+// Topic `index`'s other `KEY value` lines, verbatim.
 //
 // # Safety
-// `vol` is a live handle; `name` a string; `index` writable.
-enum Op2fStatus op2f_vol_find(const struct Op2fVol *vol, const char *name, size_t *index);
+// `tree` is a live handle; `out` writable.
+enum Op2fStatus op2f_tech_other(const struct Op2fTechTree *tree,
+                                size_t index,
+                                struct Op2fStringPairs **out);
 
-// Entry `index`'s contents, decompressed.
+// The game's UI strings: OPU's `language.ini` (`[Game]` section). A stock install has none, giving an empty table.
 //
 // # Safety
-// `vol` is a live handle; `out` writable.
-enum Op2fStatus op2f_vol_read(const struct Op2fVol *vol, size_t index, struct Op2fBytes **out);
+// `game` is a live handle; `out` writable.
+enum Op2fStatus op2f_game_strings_load(const struct Op2fGame *game,
+                                       struct Op2fStringTable **out);
+
+// Parses a `language.ini` from memory (Windows-1252 text), unescaping its values as OPU does.
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_game_strings_parse(const uint8_t *data,
+                                        size_t len,
+                                        struct Op2fStringTable **out);
+
+// The string id of the armor description the unit panel shows for an armor value (256 = none, down to 40);
+// structures and vehicles use different words.
+uint32_t op2f_armor_name_id(int32_t armor,
+                            bool structure);
+
+// The direction column (0-15) the game draws for a rotation (0-255, 0 east, clockwise).
+uint32_t op2f_direction_column(uint8_t rotation);
+
+// The rotation at the centre of a direction column (0-15).
+uint8_t op2f_column_rotation(uint32_t column);
+
+// Number of unit types in a table.
+size_t op2f_unit_art_count(enum Op2fUnitArtTable table);
+
+// The code name of entry `index` of a table, e.g. "LIGHT_TANK", as a static string; NULL when out of range.
+const char *op2f_unit_art_code(enum Op2fUnitArtTable table,
+                               size_t index);
+
+// The column of the ambient animation sequence a structure uses (0 = none; see `op2f_exe_ambient_sequence`).
+//
+// # Safety
+// `code` is a string; `out` writable.
+enum Op2fStatus op2f_building_ambient(const char *code,
+                                      bool plymouth,
+                                      uint8_t *out);
+
+// The turret animation for `weapon` (a `weapons.txt` code, e.g. "LASER") on `chassis` ("LIGHT_TANK"/"Lynx",
+// "MED_TANK"/"Panther", "BIG_TANK"/"Tiger" or "TOWER_GUARD" for a Guard Post), facing `rotation`.
+//
+// # Safety
+// `weapon` and `chassis` are strings; `out` writable.
+enum Op2fStatus op2f_turret_animation(const char *weapon,
+                                      const char *chassis,
+                                      bool plymouth,
+                                      uint8_t rotation,
+                                      size_t *out);
+
+// Where a turret sits on a chassis animation: the turret's hotspot goes at the chassis's hotspot plus (`*x`, `*y`).
+//
+// # Safety
+// `sprites` is a live handle; `x` and `y` writable.
+enum Op2fStatus op2f_turret_offset(const struct Op2fSprites *sprites,
+                                   size_t chassis_animation,
+                                   int32_t *x,
+                                   int32_t *y);
+
+// Where shots leave the barrel, relative to the chassis's hotspot (inferred from the game's code, not yet checked
+// against shots in game).
+//
+// # Safety
+// `sprites` is a live handle; `x` and `y` writable.
+enum Op2fStatus op2f_muzzle_offset(const struct Op2fSprites *sprites,
+                                   size_t chassis_animation,
+                                   size_t turret_animation,
+                                   int32_t *x,
+                                   int32_t *y);
+
+// Draws a vehicle's chassis facing `rotation`: frame `frame` (wrapping) of its normal animation, on the
+// animation's whole canvas. `player` as in `op2f_sprites_frame`.
+//
+// # Safety
+// `sprites` is a live handle; `code` a string; `out` writable.
+enum Op2fStatus op2f_sprites_vehicle(const struct Op2fSprites *sprites,
+                                     const char *code,
+                                     bool plymouth,
+                                     uint8_t rotation,
+                                     size_t frame,
+                                     int32_t player,
+                                     struct Op2fImage **out);
+
+// A structure's overlay for its animation state (0 built, 5 operating, ...; MapObject +0x36), into `shape`'s overlay
+// fields; `OP2F_STATUS_NOT_FOUND` when it has none (`has_overlay` is then cleared).
+//
+// # Safety
+// `code` is a string; `shape` a writable, initialised shape.
+enum Op2fStatus op2f_pick_overlay(const char *code,
+                                  uint16_t state,
+                                  bool plymouth,
+                                  struct Op2fPickShape *shape);
+
+// An animation's selection box relative to the unit's pixel: left, top, width, height into `out`.
+//
+// # Safety
+// `sprites` is a live handle; `out` is 4 writable values.
+enum Op2fStatus op2f_pick_selection_box(const struct Op2fSprites *sprites,
+                                        size_t animation,
+                                        int32_t *out);
+
+// Whether a click (`dx`, `dy`) pixels from a unit's pixel hits it, as the game decides.
+//
+// # Safety
+// `sprites` is a live handle; `shape` readable; `out` writable.
+enum Op2fStatus op2f_pick_hits(const struct Op2fSprites *sprites,
+                               const struct Op2fPickShape *shape,
+                               int32_t dx,
+                               int32_t dy,
+                               bool *out);
+
+// What a left click at map pixel (`x`, `y`) selects for `player`: the last of the player's units hit, i.e. the one
+// drawn on top. `candidates` must be sorted by y, as the game's object list is; `*index` receives the position in
+// it, or `OP2F_STATUS_NOT_FOUND` when nothing is hit.
+//
+// # Safety
+// `sprites` is a live handle; `candidates` is `count` readable candidates; `index` writable.
+enum Op2fStatus op2f_pick_select(const struct Op2fSprites *sprites,
+                                 const struct Op2fPickCandidate *candidates,
+                                 size_t count,
+                                 int32_t x,
+                                 int32_t y,
+                                 uint8_t player,
+                                 size_t *index);
+
+// The unit a command (Attack, Repair, ...) at map pixel (`x`, `y`) targets: the first unit of any player hit, i.e.
+// the one drawn underneath. Otherwise as `op2f_pick_select`.
+//
+// # Safety
+// `sprites` is a live handle; `candidates` is `count` readable candidates; `index` writable.
+enum Op2fStatus op2f_pick_target(const struct Op2fSprites *sprites,
+                                 const struct Op2fPickCandidate *candidates,
+                                 size_t count,
+                                 int32_t x,
+                                 int32_t y,
+                                 size_t *index);
+
+// Reads a cutscene from the game by name (e.g. "MEI.AVI").
+//
+// # Safety
+// `game` is a live handle; `name` a string; `out` writable.
+enum Op2fStatus op2f_video_open(const struct Op2fGame *game,
+                                const char *name,
+                                struct Op2fVideo **out);
+
+// Parses an AVI from memory (the bytes are copied).
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_video_parse(const uint8_t *data, size_t len, struct Op2fVideo **out);
+
+// # Safety
+// `video` is NULL or a live handle, not used afterwards.
+void op2f_video_free(struct Op2fVideo *video);
+
+// # Safety
+// `video` is a live handle; `out` writable.
+enum Op2fStatus op2f_video_info(const struct Op2fVideo *video, struct Op2fVideoInfo *out);
+
+// Whether video frame `frame` decodes on its own (a keyframe, where playback can start).
+//
+// # Safety
+// `video` is a live handle; `out` writable.
+enum Op2fStatus op2f_video_is_keyframe(const struct Op2fVideo *video, size_t frame, bool *out);
+
+// Decodes video frame `frame` as RGBA (alpha 255): width * height * 4 bytes into `out`, which holds `cap`. Playing
+// frames in order costs one decode each; jumping decodes from the nearest keyframe before it.
+//
+// # Safety
+// `video` is a live handle; `out` is `cap` writable bytes.
+enum Op2fStatus op2f_video_frame(const struct Op2fVideo *video,
+                                 size_t frame,
+                                 uint8_t *out,
+                                 size_t cap);
+
+// The whole audio track decoded to interleaved signed 16-bit PCM (MS ADPCM is decoded; 16-bit PCM is copied), at
+// the rate and channels `op2f_video_info` gives.
+//
+// # Safety
+// `video` is a live handle; `out` writable.
+enum Op2fStatus op2f_video_audio(const struct Op2fVideo *video,
+                                 struct Op2fBytes **out);
+
+// Number of streams.
+//
+// # Safety
+// `video` is NULL or a live handle.
+size_t op2f_video_stream_count(const struct Op2fVideo *video);
+
+// # Safety
+// `video` is a live handle; `out` writable.
+enum Op2fStatus op2f_video_stream_info(const struct Op2fVideo *video,
+                                       size_t stream,
+                                       struct Op2fStreamInfo *out);
+
+// The raw bytes of data chunk `chunk` of a stream (an encoded video frame, or a block of audio).
+//
+// # Safety
+// `video` is a live handle; `out` writable.
+enum Op2fStatus op2f_video_chunk(const struct Op2fVideo *video,
+                                 size_t stream,
+                                 size_t chunk,
+                                 struct Op2fBytes **out);
 
 #ifdef __cplusplus
 }  // extern "C"

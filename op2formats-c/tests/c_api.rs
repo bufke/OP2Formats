@@ -1,37 +1,13 @@
 //! The C interface called the way C code calls it: raw pointers, status codes, caller buffers. Checks that need the
 //! game find it through `$OP2_DIR` and skip without it (`OP2_REQUIRE_DATA=1` makes that a failure).
 
+mod common;
+
 use std::ffi::{CStr, CString, c_char};
 use std::ptr::{null, null_mut};
 
+use common::*;
 use op2formats::*;
-
-fn last_error() -> String {
-    let mut buf = [0 as c_char; 512];
-    unsafe { op2f_last_error(buf.as_mut_ptr(), buf.len()) };
-    unsafe { CStr::from_ptr(buf.as_ptr()) }.to_string_lossy().into_owned()
-}
-
-fn game() -> Option<*mut Op2fGame> {
-    let Some(dir) = std::env::var_os("OP2_DIR").filter(|d| !d.is_empty()) else {
-        assert!(std::env::var_os("OP2_REQUIRE_DATA").is_none(), "OP2_REQUIRE_DATA is set but OP2_DIR isn't");
-        eprintln!("skipping: set OP2_DIR to an Outpost 2 install");
-        return None;
-    };
-    let dir = CString::new(dir.to_str().expect("OP2_DIR is UTF-8")).unwrap();
-    let mut game = null_mut();
-    assert_eq!(unsafe { op2f_game_open(dir.as_ptr(), &mut game) }, Op2fStatus::Ok, "{}", last_error());
-    Some(game)
-}
-
-/// Reads a string through the length query and then a buffer of exactly that size.
-fn string(mut f: impl FnMut(*mut c_char, usize, *mut usize) -> Op2fStatus) -> String {
-    let mut len = 0;
-    assert_eq!(f(null_mut(), 0, &mut len), Op2fStatus::Ok, "{}", last_error());
-    let mut buf = vec![0 as c_char; len + 1];
-    assert_eq!(f(buf.as_mut_ptr(), buf.len(), &mut len), Op2fStatus::Ok, "{}", last_error());
-    unsafe { CStr::from_ptr(buf.as_ptr()) }.to_string_lossy().into_owned()
-}
 
 #[test]
 fn errors_are_status_codes_with_messages() {

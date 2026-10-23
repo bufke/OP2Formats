@@ -4,19 +4,41 @@ A C interface to OP2Formats, so C, C++ and anything else that can call a C libra
 The header is [`include/op2formats.h`](include/op2formats.h); its top comment describes the conventions
 (opaque handles, status codes, `op2f_last_error`, strings copied into caller buffers).
 
-What it covers so far:
+It covers all of op2-formats, one source file per area:
 
-| Area | Functions |
-|---|---|
-| Game folder | `op2f_game_open` (a folder, or `$OP2_DIR` / an install it finds), `op2f_game_read` any file by name, `op2f_game_source`, map names |
-| Maps | open or parse, size, wrapping and x padding, clip rect, single tiles or all tile words, tileset slots, tile mappings |
-| Tilesets | open by name or parse a BMP/PBMP, tile count, one tile as RGBA |
-| Sheets | open (`vehicles.txt`, `weapons.txt`, ...) or parse, column names, rows, cells, find a row by code name |
-| `.vol` archives | open or parse, entry names, find, read an entry (LZH entries decompressed) |
-| Sprites | load `op2_art.prt`; image and animation info; draw an image or an animation frame as RGBA in any player colour, with its hotspot; the game's click test on a frame |
-| Unit art | which animation the game draws for a vehicle (by state and facing) or a structure (by slot); a tank drawn with its turret |
+| Area | Functions | File |
+|---|---|---|
+| Game folder | `op2f_game_open` (a folder, or `$OP2_DIR` / an install it finds), read any file by name, where it came from, loose paths, map names, `.vol` list, the default game folder | `game.rs` |
+| Installs | check a folder (release, OPU version, problems), search the usual places, the data folders, the OPU folder | `install.rs` |
+| Maps | open, parse or write; size, wrapping and x padding, clip rect, tiles (read and edit), tileset slots, tile mappings, tile groups, terrain types, cell speeds | `map.rs`, `render.rs` |
+| Drawing maps | a map's tilesets loaded; the whole map at 1-32 px per tile, tile groups, one tile, a mapping's minimap colour; the GPU tile palette (texture-array layers and an overview image); tileset strips; PBMP to BMP | `render.rs` |
+| Sheets | any sheet (`vehicles.txt`, ...) or keyed sheet (`morale.txt`) by row and column | `rules.rs`, `stats.rs` |
+| Rules | the sheets decoded as the game loads them: vehicle, weapon, structure, space and mine stats; armor values; where each sheet came from | `stats.rs` |
+| Tech trees | topics with costs, requirements, texts and the stat changes they make | `stats.rs` |
+| UI strings | OPU's `language.ini`, by string id; the ids of unit, structure and weapon names and armor words | `stats.rs` |
+| Sprites | images and animation frames drawn as RGBA in any player colour, with hotspots; palettes, raw pixels, frame layers, bounds, clip rectangles; the game's click test on a frame | `sprites.rs`, `art.rs` |
+| Unit art | which animation the game draws for a vehicle (state, facing), a structure (slot) or a turret; turret and muzzle offsets; vehicles and tanks drawn whole | `sprites.rs`, `unit_art.rs` |
+| Picking | what a click selects or targets among units, as the game decides | `unit_art.rs` |
+| Images | made from pixels, shrunk, mip chains, one drawn over another | `common.rs` |
+| `.vol` archives | entries, their storage, reading them stored or decoded; LZH | `media.rs` |
+| Sound | `op2.clm` tracks as PCM or `.wav`; `.wav` formats | `sound.rs` |
+| Cutscenes | AVI frames decoded (Cinepak) in any order, the audio decoded (MS ADPCM), raw streams | `video.rs` |
+| `Outpost2.exe` | the tables read from it: sound files, Savant lengths, the ambient animation sequence, tube graphics; any value or string | `exe.rs` |
+| Windows resources | the game's DLLs: bitmaps (with palettes), cursors and icons, string tables, dialogs, menus, version strings; `.bmp`, `.cur`, `.ico` and `.ani` files | `resources.rs` |
+| Installers | GOG's offline installer (feature `inno`), OPU's installer and its install (`opu`), downloading OPU (`fetch-opu`) | `installers.rs` |
+| Lists | string lists, tables and pairs the other calls return | `common.rs` |
 
-Sounds, strings, the cutscenes and the rest of op2-formats aren't exposed yet.
+The Blight's tile masks (`virmask.raw`) are in `render.rs`. Long work (extracting, installing, downloading) reports
+through an `Op2fProgress` callback.
+
+## Features
+
+`inno` and `opu` are on by default; `fetch-opu` (an HTTPS client to download OPU) is off. A function whose feature a
+build leaves out stays in the library and returns `OP2F_STATUS_UNSUPPORTED`, so every build has the same header.
+
+```
+cargo build -p op2formats-c --release --features fetch-opu
+```
 
 ## Building
 
@@ -64,8 +86,11 @@ cd op2formats-c
 cbindgen --config cbindgen.toml --output include/op2formats.h
 ```
 
-`tests/c_api.rs` calls the functions the way C does. Its game-data test needs `OP2_DIR` (an Outpost 2 install with
-OPU 1.4.1) and skips without it; `OP2_REQUIRE_DATA=1` makes the skip a failure.
+`tests/c_api.rs` and `tests/all_areas.rs` call the functions the way C does, every area against real game files
+where it can, comparing with another route to the same data (a map written back is the file it came from, a frame
+decoded straight away is the one decoded in order, a hand-built tank is the drawn one). They need `OP2_DIR` (an
+Outpost 2 install with OPU 1.4.1) and skip without it; `OP2_REQUIRE_DATA=1` makes the skip a failure. The installer
+functions have no real-data test: no installer files are at hand.
 
 ## License
 
