@@ -30,8 +30,9 @@ cargo build
 cargo test
 ```
 
-Rust with edition 2024 support (1.85 or later) is needed. Optional features of `op2-formats`:
-`inno` (GOG's offline installer), `opu` (the OPU installer) and `fetch-opu` (downloading it).
+`rust-toolchain.toml` pins Rust 1.99, the version op2-rs builds with; rustup installs it on
+first use. Optional features of `op2-formats`: `inno` (GOG's offline installer), `opu` (the
+OPU installer) and `fetch-opu` (downloading it).
 
 ## Game data
 
@@ -49,7 +50,11 @@ A few parts still assume op2-rs's repository layout. None affects normal use:
 
 - `source_tree_game_dir` looks for op2-rs's Wine prefix next to its build folder; here it
   finds nothing and the normal install search is used.
-- A cross-check in `tests/game_data.rs` reads op2-rs's recorded oracle runs and skips when
-  they aren't there.
+- A cross-check in `tests/game_data.rs` (`rules_and_tech_trees_parse`) reads op2-rs's
+  recorded oracle runs and skips when they aren't there. With `OP2_REQUIRE_DATA=1` that
+  skip becomes a failure, so expect exactly this one test to fail in a real-data run; the
+  rest (68 of 69 with `--all-features`) pass against an OPU 1.4.1 install.
+- The installer tests (`inno_installer`, `opu_package`) need test installers named by their
+  own variables (see `tests/inno_test.iss`) and pass without checking anything otherwise.
 - `scripts/unit_anims/extract.sh`, which regenerates `units_table.rs`, expects op2-rs's
   `prefix/` and `vendor/TethysAPI` folders.
