@@ -9,8 +9,8 @@ cutscenes, tables in `Outpost2.exe`, and the GOG and OPU installers.
 
 ## Where it comes from
 
-This is the `op2-formats` crate of [op2-rs](https://gitlab.com/bufke/op2-rs), David Burke's
-reimplementation of Outpost 2, written by David Burke and op2-rs's contributors. It was
+This is the `op2-formats` crate of [op2-rs](https://gitlab.com/bufke/op2-rs), bufke's
+reimplementation of Outpost 2, written by bufke and op2-rs's contributors. It was
 imported unmodified from op2-rs commit `9798188` (see the git history) so that other Outpost 2
 projects can use it on its own. All credit for the format work goes to them.
 
