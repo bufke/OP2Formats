@@ -47,7 +47,7 @@ impl GameStrings {
             let Ok(id) = key.trim().parse::<u32>() else { continue };
             let value = value.trim();
             let value = value.strip_prefix('"').and_then(|v| v.strip_suffix('"')).unwrap_or(value);
-            strings.insert(id, value.replace("\\n", "\n"));
+            strings.insert(id, unescape(value));
         }
         Self { strings }
     }
@@ -59,6 +59,35 @@ impl GameStrings {
     pub fn is_empty(&self) -> bool {
         self.strings.is_empty()
     }
+}
+
+/// OPU's escapes in language.ini values (OPUPatch UserInterface.cpp `UnEscapeString`): each of the C escapes in turn,
+/// every occurrence replaced from the end of the string back (so `\\n` is a newline, as OPU reads it, not `\n`).
+/// String 455, `<C1>\n\tNot Operational`, is the Space Program page's yellow, indented status line.
+fn unescape(value: &str) -> String {
+    const ESCAPES: [(char, char); 11] = [
+        ('a', '\x07'),
+        ('b', '\x08'),
+        ('f', '\x0C'),
+        ('n', '\n'),
+        ('r', '\r'),
+        ('t', '\t'),
+        ('v', '\x0B'),
+        ('\\', '\\'),
+        ('\'', '\''),
+        ('"', '"'),
+        ('?', '?'),
+    ];
+    let mut out: Vec<char> = value.chars().collect();
+    for (escaped, plain) in ESCAPES {
+        // std::string::rfind(s, p): the last match starting at or before p.
+        let mut p = out.len();
+        while let Some(at) = (0..out.len().saturating_sub(1)).rev().find(|&k| k <= p && out[k] == '\\' && out[k + 1] == escaped) {
+            out.splice(at..at + 2, [plain]);
+            p = at;
+        }
+    }
+    out.into_iter().collect()
 }
 
 /// String id of the armor description the unit panel shows for an armor value (256 = none .. 40), as chosen at
@@ -98,6 +127,16 @@ mod tests {
         assert_eq!(s.get(723), Some("Lynx"));
         assert_eq!(s.get(225), Some("Dock is empty.\nTransfers"));
         assert_eq!(s.get(832), None);
+    }
+
+    #[test]
+    fn unescapes_like_opu() {
+        assert_eq!(unescape("<C1>\\n\\tNot Operational"), "<C1>\n\tNot Operational");
+        assert_eq!(unescape("Player %s has quit.\\r\\n"), "Player %s has quit.\r\n");
+        // `\n` goes before `\\`: an escaped backslash in front of an n is still read as a newline.
+        assert_eq!(unescape("a\\\\nb"), "a\\\nb");
+        assert_eq!(unescape("C:\\\\\\\\x"), "C:\\x");
+        assert_eq!(unescape("\\\"q\\\" é"), "\"q\" é");
     }
 
     #[test]
