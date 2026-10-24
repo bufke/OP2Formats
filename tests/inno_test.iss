@@ -1,4 +1,4 @@
-; Inno Setup script for dummy installers that exercise op2-formats' installer reader (tests/inno_installer.rs).
+; Inno Setup script for dummy installers that exercise op2-formats' installer reader (tests/inno_extract.rs).
 ; Build with the Inno Setup compiler (it runs under Wine), from a source folder of arbitrary files that contains
 ; sub\deeper\Deep.TXT and notepad.exe (any Windows .exe, so the x86 branch filter is used), e.g.:
 ;
@@ -7,7 +7,7 @@
 ;   wine ISCC.exe /DSrc=... /DOut=... /DOutName=zip /DComp=zip /DSolid=no inno_test.iss
 ;   wine ISCC.exe /DSrc=... /DOut=... /DOutName=span /DSpan=1 inno_test.iss
 ;
-; Then: OP2_INNO_TEST_INSTALLERS=out OP2_INNO_TEST_SOURCE=src cargo test -p op2-formats --features inno --test inno_installer
+; Then: OP2_INNO_TEST_INSTALLERS=out OP2_INNO_TEST_SOURCE=src cargo test -p op2-formats --features inno --test inno_extract
 ; The installer has what GOG's have around the files (languages, types, components, tasks, a registry key, a run
 ; entry, a {tmp} file) so the reader has to step over them.
 #ifndef Comp

@@ -6,6 +6,9 @@
 //! - Dummy installers built with Inno Setup's compiler from a folder of arbitrary files: `$OP2_INNO_TEST_INSTALLERS`
 //!   names a folder of `.exe` installers and `$OP2_INNO_TEST_SOURCE` the folder they were built from (the layout
 //!   `tools/crates/op2-formats/tests/inno_test.iss` describes). Every installer must extract to exactly that folder.
+//!
+//! The file name avoids "install", "setup", "update" and "patch": Windows asks for elevation before running an
+//! unmanifested .exe whose name contains one (installer detection), and the test binary takes this file's name.
 #![cfg(feature = "inno")]
 
 use std::fs;
