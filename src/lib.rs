@@ -5,6 +5,7 @@ pub mod art;
 pub mod avi;
 pub mod cinepak;
 pub mod exe;
+pub mod fnv;
 mod game_files;
 #[cfg(feature = "inno")]
 pub mod inno;
