@@ -9,7 +9,8 @@ use crate::GameFiles;
 /// The game folder (`default_game_dir`) when it holds an install, else `None` after [`skip`].
 pub fn game_dir() -> Option<PathBuf> {
     let dir = crate::default_game_dir();
-    if dir.join("Outpost2.exe").exists() {
+    // Found in any case, as GameFiles finds it (an install copied from a case-insensitive filesystem).
+    if crate::find_in_dir(&dir, "Outpost2.exe").is_ok() {
         Some(dir)
     } else {
         skip(&format!("no Outpost 2 install at {}", dir.display()));
