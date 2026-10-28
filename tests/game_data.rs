@@ -189,7 +189,7 @@ fn rules_and_tech_trees_parse() {
         std::fs::read_to_string(e.ok()?.path().join("gamedata.json")).ok()
     }));
     let Some(dump) = dump else {
-        testdata::skip(&format!("no gamedata.json in {}", runs.display()));
+        testdata::skip_run(&format!("no gamedata.json in {}", runs.display()));
         return;
     };
     let mut checked = 0;

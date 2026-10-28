@@ -1,6 +1,8 @@
 //! Finding real game data from tests. The data can't be committed, so a test that needs it passes without checking
-//! anything when it's missing, and says so on stderr. With `OP2_REQUIRE_DATA=1` a missing install or missing oracle
-//! runs fail the test instead, so a green run proves the real-data tests actually ran.
+//! anything when it's missing, and says so on stderr. With `OP2_REQUIRE_DATA=1` a missing install fails the test
+//! instead, so a green run proves the real-data tests actually ran. The harness's recorded runs of the original are a
+//! separate requirement, `OP2_REQUIRE_RUNS=1`: only a checkout with the harness has them, and a contributor without
+//! one can still require the game data.
 
 use std::path::{Path, PathBuf};
 
@@ -24,15 +26,25 @@ pub fn game_files() -> Option<GameFiles> {
 }
 
 /// The harness's recorded runs of the original game, `harness/oracle/runs` in this checkout (not committed; a
-/// worktree can symlink the main checkout's).
+/// worktree can symlink the main checkout's). A test missing one reports it with [`skip_run`].
 pub fn oracle_runs_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../harness/oracle/runs")
 }
 
 /// Reports that a test is skipping its real-data checks, or panics when `OP2_REQUIRE_DATA` is set.
 pub fn skip(why: &str) {
-    if std::env::var_os("OP2_REQUIRE_DATA").is_some_and(|v| !v.is_empty() && v != "0") {
-        panic!("{why} (OP2_REQUIRE_DATA is set)");
+    skip_unless("OP2_REQUIRE_DATA", why);
+}
+
+/// Reports that a test is skipping checks against a recorded run (or its `gamedata.json`), or panics when
+/// `OP2_REQUIRE_RUNS` is set.
+pub fn skip_run(why: &str) {
+    skip_unless("OP2_REQUIRE_RUNS", why);
+}
+
+fn skip_unless(var: &str, why: &str) {
+    if std::env::var_os(var).is_some_and(|v| !v.is_empty() && v != "0") {
+        panic!("{why} ({var} is set)");
     }
     eprintln!("skipping: {why}");
 }
