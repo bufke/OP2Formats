@@ -9,19 +9,20 @@ use std::path::{Path, PathBuf};
 
 use crate::GameFiles;
 
-/// The game folder (`default_game_dir`) when it holds an install, else `None` after [`skip`].
+/// The game folder (`default_game_dir`) when it holds an install, else `None` after reporting the skip, which fails
+/// under `OP2_REQUIRE_DATA` or `OP2_REQUIRE_RUNS` (a recorded run can't be replayed without the game).
 pub fn game_dir() -> Option<PathBuf> {
     let dir = crate::default_game_dir();
     // Found in any case, as GameFiles finds it (an install copied from a case-insensitive filesystem).
     if crate::find_in_dir(&dir, "Outpost2.exe").is_ok() {
         Some(dir)
     } else {
-        skip(&format!("no Outpost 2 install at {}", dir.display()));
+        skip_unless(&["OP2_REQUIRE_DATA", "OP2_REQUIRE_RUNS"], &format!("no Outpost 2 install at {}", dir.display()));
         None
     }
 }
 
-/// The installed game's files, else `None` after [`skip`].
+/// The installed game's files, else `None` as [`game_dir`] says.
 pub fn game_files() -> Option<GameFiles> {
     game_dir().map(|dir| GameFiles::open(&dir).expect("opening game folder"))
 }
@@ -32,10 +33,9 @@ pub fn oracle_runs_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../harness/oracle/runs")
 }
 
-/// Reports that a test is skipping its real-data checks, or panics when `OP2_REQUIRE_DATA` or `OP2_REQUIRE_RUNS` is
-/// set.
+/// Reports that a test is skipping its real-data checks, or panics when `OP2_REQUIRE_DATA` is set.
 pub fn skip(why: &str) {
-    skip_unless(&["OP2_REQUIRE_DATA", "OP2_REQUIRE_RUNS"], why);
+    skip_unless(&["OP2_REQUIRE_DATA"], why);
 }
 
 /// Reports that a test is skipping checks against a recorded run (or its `gamedata.json`), or panics when
