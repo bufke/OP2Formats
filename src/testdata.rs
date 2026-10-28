@@ -2,7 +2,8 @@
 //! anything when it's missing, and says so on stderr. With `OP2_REQUIRE_DATA=1` a missing install fails the test
 //! instead, so a green run proves the real-data tests actually ran. The harness's recorded runs of the original are a
 //! separate requirement, `OP2_REQUIRE_RUNS=1`: only a checkout with the harness has them, and a contributor without
-//! one can still require the game data.
+//! one can still require the game data. Replaying a run needs the install too, so `OP2_REQUIRE_RUNS=1` also fails a
+//! missing install.
 
 use std::path::{Path, PathBuf};
 
@@ -31,19 +32,20 @@ pub fn oracle_runs_dir() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../harness/oracle/runs")
 }
 
-/// Reports that a test is skipping its real-data checks, or panics when `OP2_REQUIRE_DATA` is set.
+/// Reports that a test is skipping its real-data checks, or panics when `OP2_REQUIRE_DATA` or `OP2_REQUIRE_RUNS` is
+/// set.
 pub fn skip(why: &str) {
-    skip_unless("OP2_REQUIRE_DATA", why);
+    skip_unless(&["OP2_REQUIRE_DATA", "OP2_REQUIRE_RUNS"], why);
 }
 
 /// Reports that a test is skipping checks against a recorded run (or its `gamedata.json`), or panics when
 /// `OP2_REQUIRE_RUNS` is set.
 pub fn skip_run(why: &str) {
-    skip_unless("OP2_REQUIRE_RUNS", why);
+    skip_unless(&["OP2_REQUIRE_RUNS"], why);
 }
 
-fn skip_unless(var: &str, why: &str) {
-    if std::env::var_os(var).is_some_and(|v| !v.is_empty() && v != "0") {
+fn skip_unless(vars: &[&str], why: &str) {
+    if let Some(var) = vars.iter().find(|v| std::env::var_os(v).is_some_and(|v| !v.is_empty() && v != "0")) {
         panic!("{why} ({var} is set)");
     }
     eprintln!("skipping: {why}");
