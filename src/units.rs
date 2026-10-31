@@ -209,12 +209,22 @@ pub fn turret_offset(art: &ArtFile, chassis_anim: usize) -> (i32, i32) {
     optional1(art, chassis_anim)
 }
 
+/// A Tiger turret's other barrel: frame 0's second optional offset ((0, 0) without one), which the turret graphics
+/// take for a shot with flag 0x4000 (Tiger stickyfoam 0x4A6348: the high word of 0x404F00's result).
+pub fn second_barrel(art: &ArtFile, turret_anim: usize) -> (i32, i32) {
+    art.animations
+        .get(turret_anim)
+        .and_then(|a| a.frames.first())
+        .and_then(|f| f.optional2)
+        .map_or((0, 0), |[x, y]| (x as i32, y as i32))
+}
+
 /// Where shots leave the barrel, relative to the chassis reference point: the chassis offset
 /// plus the turret animation's own first optional offset (Laser east: (14, 0)). This is the
 /// sum TankVehicle::SelectTurretGraphic (0x4855C0 Lynx, 0x4857A0 Panther) leaves in globals
 /// 0x4EA7BC/0x4EA7C0 after the weapon's `Select*Graphic`. Tiger turrets also carry a second
-/// pair (the other barrel), which the game uses when the unit has flag 0x4000; see
-/// `Frame::optional2`. Inferred from the code, not yet checked against shots in game.
+/// pair (the other barrel, [`second_barrel`]), which the game uses for a shot with flag 0x4000:
+/// every other shot (oracle `cmb_tiger_barrels`).
 pub fn muzzle_offset(art: &ArtFile, chassis_anim: usize, turret_anim: usize) -> (i32, i32) {
     let (c, t) = (optional1(art, chassis_anim), optional1(art, turret_anim));
     (c.0 + t.0, c.1 + t.1)
