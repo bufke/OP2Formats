@@ -89,10 +89,13 @@ fn every_sprite_image_decodes_and_unit_tables_resolve() {
     }
 
     use op2_formats::units;
+    let exe = op2_formats::exe::GameExe::of(&files).expect("Outpost2.exe tables");
+    let units = &exe.units;
+    assert_eq!((units.vehicles.len(), units.buildings.len(), units.turrets.len()), (15, 38, 12));
     let n = art.animations.len();
     let check = |a: u16, what: &str| assert!(a == units::NONE || (a as usize) < n, "{what}: {a}");
-    for v in units::vehicles() {
-        for (i, row) in v.eden.iter().chain(v.plymouth).enumerate() {
+    for v in &units.vehicles {
+        for (i, row) in v.eden.iter().chain(&v.plymouth).enumerate() {
             row.iter().for_each(|&a| check(a, &format!("{} row {i}", v.code)));
         }
         for col in 0..16 {
@@ -106,16 +109,16 @@ fn every_sprite_image_decodes_and_unit_tables_resolve() {
             }
         }
     }
-    for b in units::buildings() {
-        b.eden.iter().chain(&b.plymouth).for_each(|&a| check(a, b.code));
+    for b in &units.buildings {
+        b.eden.iter().chain(&b.plymouth).for_each(|&a| check(a, &b.code));
     }
-    for t in units::turrets() {
+    for t in &units.turrets {
         for set in [t.lynx, t.panther, t.tiger, t.guard_post].into_iter().flatten() {
-            set.a.iter().chain(&set.b).for_each(|&a| check(a, t.code));
+            set.a.iter().chain(&set.b).for_each(|&a| check(a, &t.code));
         }
     }
     // Lynx faces east in column 0 (hull wider than tall) and north in column 12 (taller than wide).
-    let lynx = units::vehicle("LYNX").unwrap();
+    let lynx = units.vehicle("LYNX").unwrap();
     let hull = |col| {
         let anim = &art.animations[lynx.chassis(false, 0, col).unwrap()];
         let layer = anim.frames[0].layers.iter().find(|l| !art.images[l.image as usize].is_shadow()).unwrap();

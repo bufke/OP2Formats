@@ -14,9 +14,7 @@ pub const GOG_GAME_ID: &str = "1494370738";
 /// The only place op2-rs points players to for buying the game (docs/legal.md rule 1).
 pub const GOG_STORE_URL: &str = "https://www.gog.com/en/game/outpost_2_divided_destiny";
 
-/// GOG's `Outpost2.exe` (version 1.2.0.7, as listed in the release's `goggame-1494370738.hashdb`), the build the
-/// addresses in this project were read from.
-const GOG_EXE_SHA1: &str = "1c7d63a05beae42af441e0955d0a9420fae2f85e";
+use crate::exe::GOG_EXE_SHA1;
 
 /// Files op2-rs can't run without, with what each is for.
 pub const REQUIRED: &[(&str, &str)] = &[
@@ -130,8 +128,8 @@ impl Check {
         }
         if self.exe_matches_gog == Some(false) {
             out.push(
-                "Outpost2.exe isn't GOG's build: op2-rs reads some tables from it and is tested with GOG's 1.2.0.7; \
-                 another version may show wrong sounds or animations"
+                "Outpost2.exe isn't GOG's build: op2-rs reads the game's tables from GOG's 1.2.0.7 and refuses \
+                 another version"
                     .to_string(),
             );
         }
