@@ -61,14 +61,18 @@ pub struct Check {
     pub opu_dir: Option<PathBuf>,
     /// `Outpost2.exe`'s FileVersion, when readable.
     pub exe_version: Option<String>,
-    /// Whether `Outpost2.exe` is byte-identical to GOG's (`None` when it's missing).
+    /// Whether `Outpost2.exe` is byte-identical to GOG's (`None` when it's missing). Another build runs if its tables
+    /// read (a warning in [`Check::problems`]).
     pub exe_matches_gog: Option<bool>,
+    /// Why op2-rs can't read the game's tables from `Outpost2.exe` (`exe::GameExe::read`; `None` when it can, or
+    /// there is no exe): a blocking problem.
+    pub exe_tables_problem: Option<String>,
 }
 
 impl Check {
     /// Whether op2-rs can run from this folder.
     pub fn ok(&self) -> bool {
-        self.missing.is_empty()
+        self.missing.is_empty() && self.exe_tables_problem.is_none()
     }
 
     /// The release in a few words: "GOG 1.2 + OPU 1.4.1" (the target), "GOG 1.2, no OPU", "CD release + OPU 1.4.1".
@@ -110,6 +114,9 @@ impl Check {
 
     /// A one-line form of [`problems`](Self::problems) for tight spaces: "missing maps.vol, e01.dll".
     pub fn short_problem(&self) -> String {
+        if let (true, Some(p)) = (self.missing.is_empty(), &self.exe_tables_problem) {
+            return p.clone();
+        }
         if self.missing.is_empty() {
             return self.problems().join("; ");
         }
@@ -126,10 +133,12 @@ impl Check {
             let why = REQUIRED.iter().find(|(n, _)| n == name).map(|(_, w)| *w).unwrap_or("");
             out.push(format!("missing {name} ({why})"));
         }
-        if self.exe_matches_gog == Some(false) {
+        if let Some(p) = &self.exe_tables_problem {
+            out.push(p.clone());
+        } else if self.exe_matches_gog == Some(false) {
             out.push(
-                "Outpost2.exe isn't GOG's build: op2-rs reads the game's tables from GOG's 1.2.0.7 and refuses \
-                 another version"
+                "Outpost2.exe isn't GOG's build: op2-rs reads some tables from it and is tested with GOG's 1.2.0.7; \
+                 its tables passed op2-rs's checks, but sounds or animations may differ"
                     .to_string(),
             );
         }
@@ -150,10 +159,25 @@ fn check_with_opu(dir: &Path, opu_dir: Option<PathBuf>) -> Check {
     let missing_optional = OPTIONAL.iter().map(|(n, _)| *n).filter(|n| !has(n)).collect();
     let release = if has(&format!("goggame-{GOG_GAME_ID}.info")) { Release::Gog } else { Release::Cd };
     let opu = opu_dir.as_deref().and_then(opu_version_of);
-    let exe = names.get("outpost2.exe").and_then(|p| fs::read(p).ok());
+    // op2-rs's copy of a CD build's exe updated by OPU (`exe::PATCHED_EXE`), which the game's tables are read from,
+    // else the game folder's.
+    let patched = opu_dir.as_deref().and_then(|o| resolve_ci(o, Path::new(crate::exe::PATCHED_EXE))).filter(|p| p.is_file());
+    let exe = patched.as_ref().or(names.get("outpost2.exe")).and_then(|p| fs::read(p).ok());
     let exe_version = exe.as_deref().and_then(exe_file_version);
     let exe_matches_gog = exe.as_deref().map(|d| sha1_smol::Sha1::from(d).digest().to_string() == GOG_EXE_SHA1);
-    Check { dir: dir.to_path_buf(), missing, missing_optional, release, opu, opu_dir, exe_version, exe_matches_gog }
+    let exe_tables_problem = exe.as_deref().and_then(exe_tables_problem);
+    Check { dir: dir.to_path_buf(), missing, missing_optional, release, opu, opu_dir, exe_version, exe_matches_gog, exe_tables_problem }
+}
+
+/// Why the game's tables can't be read from these `Outpost2.exe` bytes (`exe::GameExe::read`), if they can't.
+fn exe_tables_problem(exe: &[u8]) -> Option<String> {
+    // The fake installs of this module's tests are empty files.
+    #[cfg(test)]
+    if exe.is_empty() {
+        return None;
+    }
+    let tables = crate::exe::Exe::parse(exe.to_vec()).and_then(|e| crate::exe::GameExe::read(&e));
+    tables.err().map(|e| e.to_string())
 }
 
 /// Where op2-rs installs OPU when the game folder has none: `<data folder>/op2-rs/OPU`, beside its copy of the game
@@ -1081,6 +1105,26 @@ mod tests {
         assert!(c.problems()[0].starts_with("missing sheets.vol"));
         assert_eq!(c.short_problem(), "missing sheets.vol, e01.dll");
         assert_eq!(check(&t.0.join("nowhere")).short_problem(), "no Outpost 2 files in it");
+    }
+
+    /// An Outpost2.exe whose tables can't be read blocks the folder (and the search passes over it); the real one
+    /// reads.
+    #[test]
+    fn an_exe_whose_tables_dont_read_blocks_the_install() {
+        let t = Tmp::new("exe-tables");
+        let dir = t.0.join("Outpost 2");
+        fake_install(&dir, true);
+        fs::write(dir.join("Outpost2.exe"), b"MZ not a game").unwrap();
+        let c = check(&dir);
+        assert!(!c.ok() && c.missing.is_empty());
+        assert!(c.short_problem().contains("not a PE executable"), "{}", c.short_problem());
+        assert!(c.problems().iter().any(|p| p.contains("not a PE executable")));
+        let s = Search { searched: Vec::new(), found: vec![(Candidate { dir: dir.clone(), origin: "test".into() }, c)] };
+        assert!(s.best().is_none());
+        if let Some(files) = crate::testdata::game_files() {
+            let real = check(files.root());
+            assert_eq!(real.exe_tables_problem, None);
+        }
     }
 
     #[test]

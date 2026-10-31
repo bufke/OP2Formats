@@ -214,7 +214,12 @@ mod imp {
                 own.insert(rel.replace('\\', "/"), f);
             }
         }
-        let base = game_files(game)?;
+        let mut base = game_files(game)?;
+        // A CD copy's Outpost2.exe, brought up to date the way OPU's installer updates it in a CD game folder, as a
+        // copy in op2-rs's OPU tree (the player's game folder is never changed); GOG's needs nothing.
+        if let Some(exe) = patched_exe(game, &patches)? {
+            base.insert(PATCHED_EXE.to_string(), exe);
+        }
         let total = (base.len() + own.len()) as u64;
         let mut done = 0u64;
         let mut warnings = Vec::new();
@@ -285,6 +290,22 @@ mod imp {
             }
         }
         Ok(out)
+    }
+
+    /// Where op2-rs's OPU tree keeps a CD copy's Outpost2.exe after OPU's update ([`patched_exe`]): `base` is indexed
+    /// before the game folder, so the game's tables are read from it.
+    pub const PATCHED_EXE: &str = crate::exe::PATCHED_EXE;
+
+    /// The game folder's Outpost2.exe with OPU's patch for it applied, if OPU has one (a CD build: OPU 1.4.1 brings
+    /// the CD releases' builds to one file, `exe::OPU_CD_EXE_SHA1`; GOG's has none).
+    fn patched_exe(game: &Path, patches: &HashMap<String, (String, Vec<u8>)>) -> Result<Option<Vec<u8>>, Error> {
+        let Ok(path) = crate::find_in_dir(game, "Outpost2.exe") else { return Ok(None) };
+        let data = fs::read(&path).map_err(|e| Error::Io { path: path.display().to_string(), source: e })?;
+        let sha = sha1_smol::Sha1::from(&data).digest().to_string();
+        if !patches.contains_key(&sha) {
+            return Ok(None);
+        }
+        patch(data, patches).map(Some).map_err(|e| Error::Invalid(format!("Outpost2.exe: {e}")))
     }
 
     /// OPU's patches, by the SHA-1 of the file each applies to: (SHA-1 of the result, patch stream).
@@ -518,6 +539,25 @@ mod imp {
             assert_eq!(patch(b"other".to_vec(), &set).unwrap(), b"other", "no patch for it");
             set.insert(sha(&old), ("0".repeat(40), stream));
             assert!(patch(old, &set).is_err(), "a result that doesn't match the name is refused");
+        }
+
+        /// A game folder's Outpost2.exe that OPU has a patch for comes out patched (a CD build); one it has none for
+        /// (GOG's) is left alone.
+        #[test]
+        fn a_cd_exe_is_patched_into_a_copy() {
+            let dir = std::env::temp_dir().join(format!("op2-cd-exe-{}", std::process::id()));
+            fs::create_dir_all(&dir).unwrap();
+            let (old, new) = (b"CD build".to_vec(), b"OPU 1.2!".to_vec());
+            let sha = |d: &[u8]| sha1_smol::Sha1::from(d).digest().to_string();
+            let diff: Vec<u8> = new.iter().zip(&old).map(|(n, o)| n.wrapping_sub(*o)).collect();
+            let mut set = HashMap::new();
+            set.insert(sha(&old), (sha(&new), opu_patch(&[(&diff, b"", 0)])));
+            assert_eq!(patched_exe(&dir, &set).unwrap(), None, "no exe");
+            fs::write(dir.join("OUTPOST2.EXE"), &old).unwrap();
+            assert_eq!(patched_exe(&dir, &set).unwrap(), Some(new));
+            fs::write(dir.join("OUTPOST2.EXE"), b"GOG build").unwrap();
+            assert_eq!(patched_exe(&dir, &set).unwrap(), None, "no patch for it");
+            let _ = fs::remove_dir_all(&dir);
         }
 
         #[test]

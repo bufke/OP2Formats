@@ -224,8 +224,11 @@ fn type_vtables(exe: &Exe) -> Vec<TypeVtable> {
         .collect()
 }
 
-/// The table addresses and immediate turret ids a `Select*Graphic` uses, in code order.
-fn turret_select(exe: &Exe, select: u32) -> Option<(Vec<u32>, Vec<u32>)> {
+/// What a `Select*Graphic` picks from: its tables' addresses and its immediate turret ids, in code order.
+type TurretPick = (Vec<u32>, Vec<u32>);
+
+/// The [`TurretPick`] of a `Select*Graphic`; `None` if it isn't one (it never sets the turret graphic).
+fn turret_select(exe: &Exe, select: u32) -> Option<TurretPick> {
     use iced_x86::{OpKind, Register};
     let body = code::until_ret(exe, select, 0x90)?;
     let (mut tables, mut imms) = (Vec::new(), Vec::new());
@@ -287,18 +290,17 @@ impl UnitArt {
             if slots.len() != 4 || slots.iter().zip(NO_TURRET).all(|(&s, n)| s == n) {
                 continue;
             }
-            // [guard post, tiger, panther, lynx]; a slot that is neither the base class's nor a turret pick means
-            // this isn't a weapon type's vtable.
+            // [guard post, tiger, panther, lynx]: the base class's (draws nothing), a turret pick, or something else.
+            let picks: Vec<Option<Option<TurretPick>>> =
+                slots.iter().zip(NO_TURRET).map(|(&select, none)| (select != none).then(|| turret_select(exe, select))).collect();
+            // A vtable with no turret pick isn't a weapon type's (the words after a shorter vtable).
+            if !picks.iter().any(|p| matches!(p, Some(Some(_)))) {
+                continue;
+            }
             let mut sets = [None; 4];
-            let mut weapon = true;
-            for (k, (&select, none)) in slots.iter().zip(NO_TURRET).enumerate() {
-                if select == none {
-                    continue;
-                }
-                let Some((tables, imms)) = turret_select(exe, select) else {
-                    weapon = false;
-                    break;
-                };
+            for (k, (pick, &select)) in picks.into_iter().zip(&slots).enumerate() {
+                let Some(pick) = pick else { continue };
+                let (tables, imms) = pick.ok_or_else(|| bad(format!("{}'s turret routine at {select:#x} isn't one op2-rs reads", t.code)))?;
                 let column = |t: u32| -> Option<[u16; 16]> {
                     let mut c = [0; 16];
                     for (i, v) in c.iter_mut().enumerate() {
@@ -311,14 +313,12 @@ impl UnitArt {
                 } else {
                     imms.iter().map(|&v| [art(v); 16]).collect()
                 };
-                if let Some(&a) = pick.first() {
-                    sets[k] = Some(TurretSet { select, a, b: *pick.get(1).unwrap_or(&a) });
-                }
+                let &a = pick.first().ok_or_else(|| bad(format!("{}'s turret routine at {select:#x} names no animation", t.code)))?;
+                sets[k] = Some(TurretSet { select, a, b: *pick.get(1).unwrap_or(&a) });
             }
-            if !weapon || sets.iter().all(Option::is_none) {
-                continue;
-            }
-            let code = GUARD_POST_TWINS.iter().find(|(gp, _)| *gp == t.code).map_or(t.code.as_str(), |(_, w)| w);
+            // A guard post twin gives its weapon the guard post's turret, the weapon its tanks'; each chassis has one.
+            let twin = GUARD_POST_TWINS.iter().find(|(gp, _)| *gp == t.code);
+            let code = twin.map_or(t.code.as_str(), |(_, w)| w);
             let entry = match out.turrets.iter_mut().position(|w| w.code == code) {
                 Some(i) => &mut out.turrets[i],
                 None => {
@@ -327,10 +327,12 @@ impl UnitArt {
                 }
             };
             let [gp, tiger, panther, lynx] = sets;
-            entry.guard_post = entry.guard_post.or(gp);
-            entry.tiger = entry.tiger.or(tiger);
-            entry.panther = entry.panther.or(panther);
-            entry.lynx = entry.lynx.or(lynx);
+            for (slot, new) in [(&mut entry.guard_post, gp), (&mut entry.tiger, tiger), (&mut entry.panther, panther), (&mut entry.lynx, lynx)] {
+                if new.is_some() && slot.is_some() {
+                    return Err(bad(format!("{} and {} both draw a turret for one chassis", code, t.code)));
+                }
+                *slot = slot.or(new);
+            }
         }
         out.cargo = cargo_art(exe).ok_or_else(|| bad("no Cargo Truck tables".into()))?;
         let words = |at: u32| -> Option<[u16; 11]> {

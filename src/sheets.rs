@@ -106,7 +106,7 @@ impl Track {
 
 /// Armor value the game derives from a sheet armor class (0-5), as loaded in memory
 /// (gamedata.json `armor`): e.g. Lynx class 1 = 180, Tiger class 3 = 90, Command Center 5 = 40.
-/// Presumably a damage multiplier out of 256.
+/// Presumably a damage multiplier out of 256. Six dwords at 0x4E1518 in Outpost2.exe: a small cited table, kept.
 pub fn armor_value(class: u32) -> u32 {
     [256, 180, 130, 90, 60, 40].get(class as usize).copied().unwrap_or(256)
 }

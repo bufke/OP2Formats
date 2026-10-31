@@ -2,14 +2,15 @@
 //! (docs/legal.md rule 4): a minimal PE reader that maps virtual addresses to file bytes, and [`GameExe`], every table
 //! op2-rs takes from the executable, read once per game folder in a process ([`GameExe::of`]).
 //!
-//! The addresses are GOG's 1.2.0.7 build's (the one OPU 1.4.1 runs on), so [`GameExe::read`] first checks that the
-//! file is that build, by its SHA-1, and refuses any other: a different build would put other bytes at these
-//! addresses. Input is untrusted: every read is bounds-checked and a table that doesn't look right is an error.
+//! The addresses are GOG's 1.2.0.7 build's (the one OPU 1.4.1 runs on; a CD copy brought up to date by OPU has the
+//! same file). [`GameExe::read`] notes whether the file is that build, by its SHA-1, but doesn't refuse another: the
+//! gate is each table's own check (shapes, ranges, the code patterns it reads), and a table that doesn't look right
+//! is one error naming the file, the table and the builds op2-rs supports. Input is untrusted: every read is
+//! bounds-checked.
 
 pub(crate) mod code;
 
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::units::UnitArt;
 use crate::{Error, GameFiles};
@@ -18,8 +19,31 @@ use crate::{Error, GameFiles};
 /// addresses in this project were read from.
 pub const GOG_EXE_SHA1: &str = "1c7d63a05beae42af441e0955d0a9420fae2f85e";
 
+/// The Outpost2.exe of a CD install updated by OPU 1.4.1: its installer's patches for the CD builds
+/// ([`CD_EXE_SHA1`]) all end in this file (1,144,320 bytes; GOG's is 1,144,832). OPU has no patch to or from GOG's.
+/// Untested here (no CD copy): whether its tables sit where GOG's do; op2-rs reads it if its tables pass the checks.
+pub const OPU_CD_EXE_SHA1: &str = "9ac2ef155fb5a86444eb2bbd0fadd3667ffa4ec6";
+
+/// The Outpost2.exe builds OPU 1.4.1's installer updates to [`OPU_CD_EXE_SHA1`] (its Helper.dll's patches
+/// `<before>_<after>.dat`): the CD releases and their updates. op2-rs's OPU install applies the patch to a copy
+/// (`opu::PATCHED_EXE`).
+/// Where op2-rs's OPU tree keeps the copy of a CD build's Outpost2.exe that it updated with OPU's patch, below the OPU
+/// folder (`GameFiles` indexes `base` before the game folder, and `install::check` reads it there too).
+pub const PATCHED_EXE: &str = "base/Outpost2.exe";
+
+pub const CD_EXE_SHA1: [&str; 6] = [
+    "03daaf6183f01b58414e2b737f682557cc7b2de9",
+    "278c7b992013884f12a7cf55d21ce5a3b31c3c1f",
+    "2f8132055513fa316abcc76db7f2783407a580bb",
+    "6430e83fe7214bfa832d6474664e1b1349b292ea",
+    "793874d4dab1b880b43401f49e70eb9b3c702796",
+    "a28b474c90fc2d7ed21bd05575ea30cafafe75fb",
+];
+
 /// The executable's image: the file plus its section table.
 pub struct Exe {
+    /// Where it came from, for messages.
+    path: String,
     data: Vec<u8>,
     base: u32,
     sections: Vec<Section>,
@@ -78,15 +102,19 @@ pub const SAVANT_PRIORITY_LEN: usize = 40;
 /// 64). op2-sim computes it; [`Exe::direction_table`] reads it for the test that checks the two agree.
 pub const COS_TABLE: u32 = 0x4E9B30;
 
-/// Everything op2-rs reads from the player's Outpost2.exe.
+/// Everything op2-rs reads from the player's Outpost2.exe. `Default` is no exe: empty tables, `None` options (rules
+/// for tests that invent their own values).
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct GameExe {
+    /// Whether the file is GOG's 1.2.0.7 build ([`GOG_EXE_SHA1`]); another build whose tables passed their checks
+    /// runs with a warning ([`GameExe::warning`]).
+    pub gog_build: bool,
     /// The sound file of every SoundID (TethysAPI `SoundID`), e.g. `laser.wav`.
     pub sound_files: Vec<String>,
     /// The structures' ambient animation sequence ([`Exe::ambient_sequence`]).
-    pub ambient: [[u8; 5]; AMBIENT_ROWS],
+    pub ambient: Option<[[u8; 5]; AMBIENT_ROWS]>,
     /// The tube and wall graphic of each set of connections ([`Exe::tube_graphics`]).
-    pub tube_graphics: [u8; 16],
+    pub tube_graphics: Option<[u8; 16]>,
     /// Which animations each unit type draws (`units`).
     pub units: UnitArt,
     /// The cell types' movement and sight properties (`CELL_TYPES`).
@@ -112,32 +140,57 @@ pub struct CellType {
 
 impl GameExe {
     /// The tables of `files`' Outpost2.exe, read on the first call for that game folder and shared after (about
-    /// 10 ms: the file's hash and a few thousand decoded instructions). A failed read isn't kept: the next call tries
+    /// 4 ms: the file's hash and a few thousand decoded instructions). A failed read isn't kept: the next call tries
     /// again.
     pub fn of(files: &GameFiles) -> Result<Arc<GameExe>, Error> {
-        static CACHE: Mutex<Vec<(PathBuf, Arc<GameExe>)>> = Mutex::new(Vec::new());
-        // Held while reading, so threads starting together read a folder once.
-        let mut cache = CACHE.lock().unwrap_or_else(|e| e.into_inner());
-        if let Some((_, t)) = cache.iter().find(|(r, _)| r == files.root()) {
-            return Ok(t.clone());
-        }
-        let tables = Arc::new(Self::read(&Exe::open(files)?)?);
-        cache.push((files.root().to_path_buf(), tables.clone()));
-        Ok(tables)
+        static CACHE: crate::cache::FolderCache<GameExe> = crate::cache::FolderCache::new();
+        CACHE.get_or_try(files.root(), || Self::read(&Exe::open(files)?))
     }
 
-    /// Every table of `exe`, after checking it is GOG's 1.2.0.7 build ([`GOG_EXE_SHA1`]).
+    /// Every table of `exe`. A table that fails its check is an error naming the file and the table; the SHA-1 only
+    /// sets [`GameExe::gog_build`].
     pub fn read(exe: &Exe) -> Result<GameExe, Error> {
-        exe.check_identity()?;
+        let sha1 = exe.sha1();
+        let gog_build = sha1 == GOG_EXE_SHA1;
+        if CD_EXE_SHA1.contains(&sha1.as_str()) {
+            return Err(Error::Unsupported(format!(
+                "{} is a CD build (SHA-1 {sha1}) that OPU updates: install OPU 1.4.1 (`op2 setup` applies its update to \
+                 a copy in op2-rs's data folder; your game folder isn't changed)",
+                exe.path
+            )));
+        }
+        let refused = |e: Error| {
+            let build = match sha1.as_str() {
+                GOG_EXE_SHA1 => "GOG's 1.2.0.7 build".to_string(),
+                OPU_CD_EXE_SHA1 => "a CD build updated by OPU 1.4.1".to_string(),
+                other => format!("an unknown build, SHA-1 {other}"),
+            };
+            Error::Unsupported(format!(
+                "{} ({build}): {e}. op2-rs reads the game's tables from GOG's Outpost2.exe 1.2.0.7, or a CD copy \
+                 brought up to it by OPU 1.4.1",
+                exe.path
+            ))
+        };
+        let research = exe.research_efficiency().map_err(refused)?;
         Ok(GameExe {
-            sound_files: exe.sound_files()?,
-            ambient: exe.ambient_sequence()?,
-            tube_graphics: exe.tube_graphics()?,
-            units: UnitArt::read(exe)?,
-            cells: exe.cell_types()?,
-            research_efficiency: exe.signed_bytes(RESEARCH_EFFICIENCY, RESEARCH_EFFICIENCY_LEN, "research efficiency")?,
-            morale_mods: exe.morale_mods()?,
-            savant_priority: exe.savant_priority()?,
+            gog_build,
+            sound_files: exe.sound_files().map_err(refused)?,
+            ambient: Some(exe.ambient_sequence().map_err(refused)?),
+            tube_graphics: Some(exe.tube_graphics().map_err(refused)?),
+            units: UnitArt::read(exe).map_err(refused)?,
+            cells: exe.cell_types().map_err(refused)?,
+            research_efficiency: research,
+            morale_mods: exe.morale_mods().map_err(refused)?,
+            savant_priority: exe.savant_priority().map_err(refused)?,
+        })
+    }
+
+    /// What to tell the player about a build that isn't GOG's but whose tables passed their checks.
+    pub fn warning(&self) -> Option<String> {
+        (!self.gog_build && !self.sound_files.is_empty()).then(|| {
+            "Outpost2.exe isn't GOG's 1.2.0.7 build: its tables passed op2-rs's checks, but op2-rs is tested with \
+             GOG's; sounds or animations may differ"
+                .to_string()
         })
     }
 }
@@ -161,29 +214,27 @@ impl Exe {
             let name = data.get(o..o + 8).and_then(|n| n.try_into().ok()).ok_or_else(bad)?;
             sections.push(Section { name, va: base.wrapping_add(f(12)?), vsize: f(8)?, rsize: f(16)?, raw: f(20)? });
         }
-        Ok(Self { data, base, sections })
+        Ok(Self { path: "Outpost2.exe".into(), data, base, sections })
     }
 
     /// `Outpost2.exe` from the game folder.
     pub fn open(files: &GameFiles) -> Result<Self, Error> {
         let path = files.loose_path("Outpost2.exe").ok_or_else(|| Error::NotFound("Outpost2.exe".into()))?;
-        Self::parse(std::fs::read(path).map_err(|e| Error::Io { path: path.display().to_string(), source: e })?)
+        let exe = Self::parse(std::fs::read(path).map_err(|e| Error::Io { path: path.display().to_string(), source: e })?)?;
+        Ok(Self { path: path.display().to_string(), ..exe })
     }
 
     pub fn image_base(&self) -> u32 {
         self.base
     }
 
-    /// Whether this is GOG's 1.2.0.7 build, the only one whose addresses op2-rs knows.
-    pub fn check_identity(&self) -> Result<(), Error> {
-        let sha1 = sha1_smol::Sha1::from(&self.data).digest().to_string();
-        if sha1 == GOG_EXE_SHA1 {
-            return Ok(());
-        }
-        Err(Error::Unsupported(format!(
-            "Outpost2.exe isn't GOG's version 1.2.0.7 (its SHA-1 is {sha1}, GOG's {GOG_EXE_SHA1}): op2-rs reads the \
-             game's tables from that build, so it needs the GOG release's Outpost2.exe (with OPU 1.4.1)"
-        )))
+    /// Whether this is GOG's 1.2.0.7 build ([`GOG_EXE_SHA1`]), the one whose addresses op2-rs was written from.
+    pub fn is_gog_build(&self) -> bool {
+        self.sha1() == GOG_EXE_SHA1
+    }
+
+    pub fn sha1(&self) -> String {
+        sha1_smol::Sha1::from(&self.data).digest().to_string()
     }
 
     fn offset(&self, va: u32, len: usize) -> Option<usize> {
@@ -232,6 +283,17 @@ impl Exe {
         s.into_iter().flat_map(|s| (s.va..s.va + s.rsize.min(s.vsize.max(s.rsize)).saturating_sub(3)).step_by(4))
     }
 
+    /// The research efficiency bytes (`RESEARCH_EFFICIENCY`). The table proper (team sizes 1..=17, from index 19) holds
+    /// small positive efficiencies; the bytes before it are a format string's tail, which the game indexes too.
+    pub fn research_efficiency(&self) -> Result<Vec<i8>, Error> {
+        let t = self.signed_bytes(RESEARCH_EFFICIENCY, RESEARCH_EFFICIENCY_LEN, "research efficiency")?;
+        if t[19..].iter().all(|&v| (1..=32).contains(&v)) {
+            Ok(t)
+        } else {
+            Err(Error::Invalid(format!("research efficiency table at {RESEARCH_EFFICIENCY:#x}: values out of range")))
+        }
+    }
+
     /// The direction table ([`COS_TABLE`]): `trunc(64 * cos)` of the 256 headings.
     pub fn direction_table(&self) -> Result<Vec<i8>, Error> {
         self.signed_bytes(COS_TABLE, 256, "direction")
@@ -249,7 +311,7 @@ impl Exe {
             .map(|i| {
                 let name = self.u32(SOUND_FILES + 4 * i).and_then(|p| self.cstr(p));
                 name.filter(|n| n.len() > 4 && n.to_ascii_lowercase().ends_with(".wav"))
-                    .ok_or_else(|| Error::Invalid(format!("Outpost2.exe: no sound file name for id {i:#x}; not version 1.2?")))
+                    .ok_or_else(|| Error::Invalid(format!("Outpost2.exe: no sound file name for id {i:#x}")))
             })
             .collect()
     }
@@ -257,7 +319,7 @@ impl Exe {
     /// The structures' ambient animation sequence (`AMBIENT_SEQUENCE`): `[delay, slot offset per column 1..=4]` rows,
     /// 0xFF-headed at both ends.
     pub fn ambient_sequence(&self) -> Result<[[u8; 5]; AMBIENT_ROWS], Error> {
-        let bad = || Error::Invalid("Outpost2.exe: no ambient animation table at 0x4E40E0; not version 1.2?".into());
+        let bad = || Error::Invalid("Outpost2.exe: no ambient animation table at 0x4E40E0".into());
         let raw = self.bytes(AMBIENT_SEQUENCE, 5 * AMBIENT_ROWS).ok_or_else(bad)?;
         let mut rows = [[0u8; 5]; AMBIENT_ROWS];
         for (row, chunk) in rows.iter_mut().zip(raw.chunks(5)) {
@@ -271,7 +333,7 @@ impl Exe {
     /// The tube and wall graphic for each set of connections (`TUBE_GRAPHICS`): position 0..16 in a terrain type's
     /// group of 16 graphics, by neighbour mask (north 1, south 2, west 4, east 8). Each position appears once.
     pub fn tube_graphics(&self) -> Result<[u8; 16], Error> {
-        let bad = || Error::Invalid("Outpost2.exe: no tube graphics table at 0x4EA778; not version 1.2?".into());
+        let bad = || Error::Invalid("Outpost2.exe: no tube graphics table at 0x4EA778".into());
         let mut out = [0u8; 16];
         for (i, o) in out.iter_mut().enumerate() {
             *o = self.u32(TUBE_GRAPHICS + 4 * i as u32).filter(|&v| v < 16).ok_or_else(bad)? as u8;
@@ -364,17 +426,57 @@ mod tests {
         assert!(Exe::parse(vec![0; 64]).is_err());
     }
 
-    /// A PE whose bytes differ from GOG's build is refused before any table is read.
+    /// Another build runs when its tables pass their checks (with a warning), and is refused, naming the table and the
+    /// builds op2-rs supports, when one doesn't.
     #[test]
-    fn refuses_another_build() {
+    fn another_build_runs_unless_a_table_fails() {
         let Some(files) = crate::testdata::game_files() else { return };
         let path = files.loose_path("Outpost2.exe").expect("Outpost2.exe");
         let mut data = std::fs::read(path).expect("read");
         let last = data.len() - 1;
         data[last] ^= 1;
-        let err = GameExe::read(&Exe::parse(data).expect("still a PE")).expect_err("a changed byte");
-        assert!(err.to_string().contains("isn't GOG's version 1.2.0.7"), "{err}");
+        let other = GameExe::read(&Exe::parse(data.clone()).expect("still a PE")).expect("its tables still pass");
+        assert!(!other.gog_build && other.warning().is_some());
+        assert_eq!(other.units, GameExe::of(&files).unwrap().units);
+        let at = Exe::parse(data.clone()).unwrap().offset(AMBIENT_SEQUENCE, 5).unwrap();
+        data[at] = 0;
+        let err = GameExe::read(&Exe::parse(data).unwrap()).expect_err("a broken ambient table").to_string();
+        assert!(err.contains("ambient animation table") && err.contains("an unknown build"), "{err}");
+        assert!(err.contains("a CD copy brought up to it by OPU"), "{err}");
     }
+
+    /// SHA-1 digests of the tables read from GOG's build (of their `Debug` text: no game data in the source), so a
+    /// change to the readers can't shift a value unseen. The values equal the tables op2-rs embedded before
+    /// (units_table.rs, the cell speeds, ...; 2026-10-31).
+    #[test]
+    fn gog_tables_digests() {
+        let Some(files) = crate::testdata::game_files() else { return };
+        let exe = GameExe::of(&files).expect("Outpost2.exe tables");
+        let digest = |v: &dyn std::fmt::Debug| sha1_smol::Sha1::from(format!("{v:?}").as_bytes()).digest().to_string();
+        let got = [
+            ("units", digest(&exe.units)),
+            ("cells", digest(&exe.cells)),
+            ("research", digest(&exe.research_efficiency)),
+            ("morale", digest(&exe.morale_mods)),
+            ("savant", digest(&exe.savant_priority)),
+            ("sounds", digest(&exe.sound_files)),
+            ("looks", digest(&(exe.ambient, exe.tube_graphics))),
+        ];
+        let want = GOG_DIGESTS;
+        for ((name, d), (wname, w)) in got.iter().zip(want) {
+            assert_eq!((*name, d.as_str()), (wname, w), "the {name} table read from GOG's build changed");
+        }
+    }
+
+    const GOG_DIGESTS: [(&str, &str); 7] = [
+        ("units", "04db49f3eda5addb654a4fe5e8f239282ec16420"),
+        ("cells", "37a96cea973bc03eca893fd284e488647274bcfa"),
+        ("research", "aaa77e9939f50f525e359c572f94554e75e93e9e"),
+        ("morale", "434ec25e710c35adddc4ded81a178103bed7b008"),
+        ("savant", "d2b5bc7946f131db2e269b02deeb7c97d0a78749"),
+        ("sounds", "32bf5a3acc062ebe78f7be22c8cd15be0d829871"),
+        ("looks", "232b7d34b1f71a69cbaafcc698b7238104951525"),
+    ];
 
     #[test]
     fn reads_every_table() {
@@ -390,6 +492,7 @@ mod tests {
         assert_eq!(exe.savant_priority.len(), SAVANT_PRIORITY_LEN);
         assert_eq!(exe.units.select_sounds.len(), 53, "every vehicle and structure type");
         assert!(exe.units.select_sounds.iter().all(|&(_, id)| (id as usize) < SOUND_COUNT));
+        assert!(exe.gog_build && exe.warning().is_none());
         assert!(Arc::ptr_eq(&exe, &GameExe::of(&files).unwrap()), "read once per folder");
     }
 

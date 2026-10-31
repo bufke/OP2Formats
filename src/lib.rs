@@ -3,6 +3,7 @@
 pub mod adpcm;
 pub mod art;
 pub mod avi;
+pub mod cache;
 pub mod cinepak;
 pub mod exe;
 pub mod fnv;
