@@ -439,17 +439,6 @@ pub fn second_barrel(art: &ArtFile, turret_anim: usize) -> (i32, i32) {
         .map_or((0, 0), |[x, y]| (x as i32, y as i32))
 }
 
-/// Where shots leave the barrel, relative to the chassis reference point: the chassis offset
-/// plus the turret animation's own first optional offset (Laser east: (14, 0)). This is the
-/// sum TankVehicle::SelectTurretGraphic (0x4855C0 Lynx, 0x4857A0 Panther) leaves in globals
-/// 0x4EA7BC/0x4EA7C0 after the weapon's `Select*Graphic`. Tiger turrets also carry a second
-/// pair (the other barrel, [`second_barrel`]), which the game uses for a shot with flag 0x4000:
-/// every other shot (oracle `cmb_tiger_barrels`).
-pub fn muzzle_offset(art: &ArtFile, chassis_anim: usize, turret_anim: usize) -> (i32, i32) {
-    let (c, t) = (optional1(art, chassis_anim), optional1(art, turret_anim));
-    (c.0 + t.0, c.1 + t.1)
-}
-
 /// Draws `turret` over `chassis` (both with hotspots), the turret's hotspot placed at the
 /// chassis hotspot plus `offset`. The result's canvas grows to fit both.
 pub fn overlay(chassis: &Sprite, turret: &Sprite, offset: (i32, i32)) -> Sprite {
