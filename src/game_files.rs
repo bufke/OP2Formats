@@ -27,24 +27,28 @@ impl std::fmt::Display for Source {
 
 pub struct GameFiles {
     root: PathBuf,
-    /// Lowercase file name -> first loose file found, in priority order.
-    loose: HashMap<String, PathBuf>,
+    /// The folders indexed for loose files, in priority order.
+    dirs: Vec<PathBuf>,
+    /// Lowercase file name -> first loose file found, in priority order: its folder in `dirs` and its path there
+    /// (relative, so the index doesn't hold the folder's path once per file).
+    loose: HashMap<String, (usize, PathBuf)>,
     vols: Vec<(String, VolArchive)>,
 }
 
 impl GameFiles {
     pub fn open(root: impl Into<PathBuf>) -> Result<Self, Error> {
         let root = root.into();
-        let mut loose = HashMap::new();
+        let mut dirs = Vec::new();
         if let Some(opu) = crate::install::opu_dir(&root) {
             // Any case: an install copied from Windows may have `BASE` or `Maps` on a case-sensitive filesystem.
-            for dir in ["base", "maps"] {
-                if let Some(d) = crate::install::resolve_ci(&opu, Path::new(dir)) {
-                    index_dir(&d, true, &mut loose);
-                }
-            }
+            dirs.extend(["base", "maps"].into_iter().filter_map(|dir| crate::install::resolve_ci(&opu, Path::new(dir))));
         }
-        index_dir(&root, false, &mut loose);
+        let mut loose = HashMap::new();
+        for (k, d) in dirs.iter().enumerate() {
+            index_dir(d, d, k, true, &mut loose);
+        }
+        dirs.push(root.clone());
+        index_dir(&root, &root, dirs.len() - 1, false, &mut loose);
 
         let mut vols = Vec::new();
         let mut vol_paths: Vec<_> = read_dir_sorted(&root)
@@ -57,7 +61,7 @@ impl GameFiles {
             vols.push((name, VolArchive::open(&path)?));
         }
 
-        Ok(Self { root, loose, vols })
+        Ok(Self { root, dirs, loose, vols })
     }
 
     /// Opens `dir`, else [`default_game_dir`](crate::default_game_dir); an error names the folder.
@@ -83,9 +87,9 @@ impl GameFiles {
             let data = fs::read(as_path).map_err(|source| io_err(as_path, source))?;
             return Ok((data, Source::Loose(as_path.to_path_buf())));
         }
-        if let Some(path) = self.loose.get(&name.to_ascii_lowercase()) {
-            let data = fs::read(path).map_err(|source| io_err(path, source))?;
-            return Ok((data, Source::Loose(path.clone())));
+        if let Some(path) = self.loose_path(name) {
+            let data = fs::read(&path).map_err(|source| io_err(&path, source))?;
+            return Ok((data, Source::Loose(path)));
         }
         for (archive, vol) in &self.vols {
             if let Some(entry) = vol.find(name) {
@@ -97,8 +101,8 @@ impl GameFiles {
     }
 
     /// The loose file `name` resolves to, if any (for files too big to read whole, like `op2.clm`).
-    pub fn loose_path(&self, name: &str) -> Option<&Path> {
-        self.loose.get(&name.to_ascii_lowercase()).map(PathBuf::as_path)
+    pub fn loose_path(&self, name: &str) -> Option<PathBuf> {
+        self.loose.get(&name.to_ascii_lowercase()).map(|(dir, rel)| self.dirs[*dir].join(rel))
     }
 
     /// Every distinct `.map` file name available, sorted.
@@ -106,7 +110,7 @@ impl GameFiles {
         let mut names: Vec<String> = self
             .loose
             .values()
-            .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+            .filter_map(|(_, p)| p.file_name().map(|n| n.to_string_lossy().into_owned()))
             .chain(self.vols.iter().flat_map(|(_, v)| v.entries().iter().map(|e| e.name.clone())))
             .filter(|n| n.to_ascii_lowercase().ends_with(".map"))
             .collect();
@@ -131,14 +135,15 @@ pub fn find_in_dir(dir: &Path, name: &str) -> Result<PathBuf, Error> {
         .ok_or_else(|| Error::Invalid(format!("{name} not found in {}", dir.display())))
 }
 
-fn index_dir(dir: &Path, recursive: bool, out: &mut HashMap<String, PathBuf>) {
+/// Indexes the files in `dir` (in `top`, folder `k` of [`GameFiles::dirs`]) by lowercase name, keeping the first.
+fn index_dir(top: &Path, dir: &Path, k: usize, recursive: bool, out: &mut HashMap<String, (usize, PathBuf)>) {
     for path in read_dir_sorted(dir) {
         if path.is_dir() {
             if recursive {
-                index_dir(&path, true, out);
+                index_dir(top, &path, k, true, out);
             }
-        } else if let Some(name) = path.file_name() {
-            out.entry(name.to_string_lossy().to_ascii_lowercase()).or_insert(path);
+        } else if let (Some(name), Ok(rel)) = (path.file_name(), path.strip_prefix(top)) {
+            out.entry(name.to_string_lossy().to_ascii_lowercase()).or_insert_with(|| (k, rel.to_path_buf()));
         }
     }
 }

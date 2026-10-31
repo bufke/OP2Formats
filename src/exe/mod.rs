@@ -220,7 +220,7 @@ impl Exe {
     /// `Outpost2.exe` from the game folder.
     pub fn open(files: &GameFiles) -> Result<Self, Error> {
         let path = files.loose_path("Outpost2.exe").ok_or_else(|| Error::NotFound("Outpost2.exe".into()))?;
-        let exe = Self::parse(std::fs::read(path).map_err(|e| Error::Io { path: path.display().to_string(), source: e })?)?;
+        let exe = Self::parse(std::fs::read(&path).map_err(|e| Error::Io { path: path.display().to_string(), source: e })?)?;
         Ok(Self { path: path.display().to_string(), ..exe })
     }
 
