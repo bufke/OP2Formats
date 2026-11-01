@@ -164,7 +164,7 @@ pub struct GameExe {
 /// Where the original loads a cursor from.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CursorSource {
-    /// A Windows stock cursor (IDC_ARROW).
+    /// A Windows stock cursor (IDC_WAIT, IDC_CROSS or IDC_ARROW).
     Stock(u16),
     /// A cursor resource of out2res.dll by id.
     Resource(u16),
@@ -472,9 +472,11 @@ impl Exe {
 
     /// A production list as the list builder 0x468250 expands it: `list` is the list table, `chassis` and `weapons`
     /// the tables it refers to. In the list a positive entry is one MapID; -k stands for the k-th chassis, listed once
-    /// per weapon of the weapon table; -100 ends each table. Nothing is checked against what the player has built or
-    /// researched (the builder asks for that per entry), and the builder's one special case, MapID 0x20 (the Trade
-    /// Center, listed only if a global is set), is left to the caller.
+    /// per weapon of the weapon table. The list and the weapon table end with -100; the chassis table has no end
+    /// marker (it runs into the weapon table, padded by a 0 in the Vehicle Factory's), so it is read by index up to the
+    /// largest k the list uses. Nothing is checked against what the player has built or researched (the builder asks
+    /// for that per entry), and the builder's one special case, MapID 0x20 (the Trade Center, listed only if a global
+    /// is set), is left to the caller.
     pub fn build_list(&self, [list, chassis, weapons]: [u32; 3]) -> Result<Vec<(u16, Option<u16>)>, Error> {
         let bad = |why: &str| Error::Invalid(format!("Outpost2.exe: production list at {list:#x}: {why}"));
         let table = |va: u32| -> Result<Vec<i32>, Error> {
@@ -489,16 +491,19 @@ impl Exe {
             Err(bad("no end marker"))
         };
         let id = |v: i32| u16::try_from(v).ok().filter(|&v| (1..115).contains(&v)).ok_or_else(|| bad("a MapID out of range"));
-        let (chassis, weapons) = (table(chassis)?, table(weapons)?);
+        let (entries, weapons) = (table(list)?, table(weapons)?);
+        let chassis_count = entries.iter().filter(|&&v| v <= 0).map(|&v| -v as usize).max().unwrap_or(0);
+        let chassis: Vec<u16> = (0..chassis_count as u32)
+            .map(|i| id(self.u32(chassis + 4 * i).ok_or_else(|| bad("past the file"))? as i32))
+            .collect::<Result<_, _>>()?;
+        let weapons: Vec<u16> = weapons.into_iter().map(id).collect::<Result<_, _>>()?;
         let mut out = Vec::new();
-        for v in table(list)? {
+        for v in entries {
             if v > 0 {
                 out.push((id(v)?, None));
             } else {
                 let c = chassis.get((-v - 1) as usize).copied().filter(|_| v < 0).ok_or_else(|| bad("a chassis index out of range"))?;
-                for &w in &weapons {
-                    out.push((id(c)?, Some(id(w)?)));
-                }
+                out.extend(weapons.iter().map(|&w| (c, Some(w))));
             }
         }
         if out.is_empty() { Err(bad("empty")) } else { Ok(out) }
