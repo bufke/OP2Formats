@@ -98,6 +98,27 @@ const SAVANT_PRIORITY: u32 = 0x56E82E;
 const SOUND_MANAGER_INIT: u32 = 0x47DCE0;
 pub const SAVANT_PRIORITY_LEN: usize = 40;
 
+/// The armor value of each sheet armor class 0..=5 (a damage factor out of 256): six dwords at 0x4E1518, which the
+/// sheet loaders index.
+const ARMOR_VALUES: u32 = 0x4E1518;
+pub const ARMOR_CLASSES: usize = 6;
+/// The music tracks' names, one `char*` per SongID (0x4E2700, e.g. `EDEN11`; op2.clm holds the tracks).
+const MUSIC_FILES: u32 = 0x4E2700;
+pub const SONG_COUNT: usize = 26;
+/// The music volume levels in hundredths of a dB (DirectSound's unit), indexed by the ini's MusicVol (0x4D4AD8).
+const MUSIC_VOLUMES: u32 = 0x4D4AD8;
+pub const MUSIC_VOLUME_STEPS: usize = 6;
+/// The production lists of a Vehicle Factory, an Arachnid Factory and a Structure Factory, each three tables (the
+/// list, the chassis table and the weapon table it refers to) read by the list builder 0x468250.
+const VEHICLE_FACTORY_LIST: [u32; 3] = [0x4E3390, 0x4E33C8, 0x4E33D8];
+const ARACHNID_FACTORY_LIST: [u32; 3] = [0x4E3368, 0x4E3380, 0x4E3388];
+const STRUCTURE_FACTORY_LIST: [u32; 3] = [0x4E3408, 0x4E3494, 0x4E3498];
+/// The table of cursor sources (0x4E9878, loaded by 0x488910 into 0x56EA08): 35 dwords, each a cursor id or a pointer
+/// to the `.ani` file name. The first three are the system's (IDC_WAIT, IDC_CROSS, IDC_ARROW), the rest come from
+/// out2res.dll or the game folder.
+const CURSORS: u32 = 0x4E9878;
+pub const CURSOR_COUNT: usize = 35;
+
 /// `trunc(64 * cos)` of each heading, 256 signed bytes (0x4E9B30; the sine table at 0x4E9C30 is the same shifted by
 /// 64). op2-sim computes it; [`Exe::direction_table`] reads it for the test that checks the two agree.
 pub const COS_TABLE: u32 = 0x4E9B30;
@@ -125,6 +146,30 @@ pub struct GameExe {
     pub morale_mods: Vec<(String, bool)>,
     /// The Savant queue priority of SoundIDs 0xBC.. (`SAVANT_PRIORITY`).
     pub savant_priority: Vec<u8>,
+    /// The armor value of each armor class ([`GameExe::armor_value`]).
+    pub armor_values: Vec<u32>,
+    /// The music track of every SongID (`MUSIC_FILES`).
+    pub music_files: Vec<String>,
+    /// The music volume levels in hundredths of a dB by MusicVol.
+    pub music_volumes: Vec<i32>,
+    /// A Vehicle Factory's, an Arachnid Factory's and a Structure Factory's production lists in the list builder's
+    /// order: (MapID, MapID of the weapon it carries). What the colony may build is the caller's check.
+    pub vehicle_factory: Vec<(u16, Option<u16>)>,
+    pub arachnid_factory: Vec<(u16, Option<u16>)>,
+    pub structure_factory: Vec<(u16, Option<u16>)>,
+    /// The cursor sources by cursor index.
+    pub cursors: Vec<CursorSource>,
+}
+
+/// Where the original loads a cursor from.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum CursorSource {
+    /// A Windows stock cursor (IDC_ARROW).
+    Stock(u16),
+    /// A cursor resource of out2res.dll by id.
+    Resource(u16),
+    /// An animated cursor file in the game folder.
+    File(String),
 }
 
 /// One cell type's entry of the cell type table.
@@ -182,7 +227,20 @@ impl GameExe {
             research_efficiency: research,
             morale_mods: exe.morale_mods().map_err(refused)?,
             savant_priority: exe.savant_priority().map_err(refused)?,
+            armor_values: exe.armor_values().map_err(refused)?,
+            music_files: exe.music_files().map_err(refused)?,
+            music_volumes: exe.music_volumes().map_err(refused)?,
+            vehicle_factory: exe.build_list(VEHICLE_FACTORY_LIST).map_err(refused)?,
+            arachnid_factory: exe.build_list(ARACHNID_FACTORY_LIST).map_err(refused)?,
+            structure_factory: exe.build_list(STRUCTURE_FACTORY_LIST).map_err(refused)?,
+            cursors: exe.cursors().map_err(refused)?,
         })
+    }
+
+    /// The armor value the game derives from a sheet armor class (0-5), e.g. a Lynx's class 1 and a Command Center's
+    /// class 5 (a damage factor out of 256); 256 (no armor) for an unknown class or without an exe.
+    pub fn armor_value(&self, class: u32) -> u32 {
+        self.armor_values.get(class as usize).copied().unwrap_or(256)
     }
 
     /// What to tell the player about a build that isn't GOG's but whose tables passed their checks.
@@ -386,6 +444,82 @@ impl Exe {
             .collect()
     }
 
+    /// The armor value of each sheet armor class (`ARMOR_VALUES`): 256 for class 0, then falling.
+    pub fn armor_values(&self) -> Result<Vec<u32>, Error> {
+        let bad = || Error::Invalid(format!("Outpost2.exe: no armor values at {ARMOR_VALUES:#x}"));
+        let v: Vec<u32> = (0..ARMOR_CLASSES as u32).map(|i| self.u32(ARMOR_VALUES + 4 * i).ok_or_else(bad)).collect::<Result<_, _>>()?;
+        if v[0] == 256 && v.windows(2).all(|w| w[1] < w[0]) && v[ARMOR_CLASSES - 1] > 0 { Ok(v) } else { Err(bad()) }
+    }
+
+    /// The music track names (`MUSIC_FILES`): uppercase names of up to 8 characters.
+    pub fn music_files(&self) -> Result<Vec<String>, Error> {
+        (0..SONG_COUNT as u32)
+            .map(|i| {
+                let name = self.u32(MUSIC_FILES + 4 * i).and_then(|p| self.cstr(p));
+                name.filter(|n| (1..=8).contains(&n.len()) && n.bytes().all(|b| b.is_ascii_uppercase() || b.is_ascii_digit()))
+                    .ok_or_else(|| Error::Invalid(format!("Outpost2.exe: no music track name for song {i} at {MUSIC_FILES:#x}")))
+            })
+            .collect()
+    }
+
+    /// The music volume levels (`MUSIC_VOLUMES`): 0 for the loudest, then falling steps (negative hundredths of a dB).
+    pub fn music_volumes(&self) -> Result<Vec<i32>, Error> {
+        let bad = || Error::Invalid(format!("Outpost2.exe: no music volume levels at {MUSIC_VOLUMES:#x}"));
+        let v: Vec<i32> =
+            (0..MUSIC_VOLUME_STEPS as u32).map(|i| self.u32(MUSIC_VOLUMES + 4 * i).map(|v| v as i32).ok_or_else(bad)).collect::<Result<_, _>>()?;
+        if v[0] == 0 && v.windows(2).all(|w| w[1] < w[0]) && v[MUSIC_VOLUME_STEPS - 1] > -10000 { Ok(v) } else { Err(bad()) }
+    }
+
+    /// A production list as the list builder 0x468250 expands it: `list` is the list table, `chassis` and `weapons`
+    /// the tables it refers to. In the list a positive entry is one MapID; -k stands for the k-th chassis, listed once
+    /// per weapon of the weapon table; -100 ends each table. Nothing is checked against what the player has built or
+    /// researched (the builder asks for that per entry), and the builder's one special case, MapID 0x20 (the Trade
+    /// Center, listed only if a global is set), is left to the caller.
+    pub fn build_list(&self, [list, chassis, weapons]: [u32; 3]) -> Result<Vec<(u16, Option<u16>)>, Error> {
+        let bad = |why: &str| Error::Invalid(format!("Outpost2.exe: production list at {list:#x}: {why}"));
+        let table = |va: u32| -> Result<Vec<i32>, Error> {
+            let mut out = Vec::new();
+            for i in 0..64 {
+                let v = self.u32(va + 4 * i).ok_or_else(|| bad("past the file"))? as i32;
+                if v == -100 {
+                    return Ok(out);
+                }
+                out.push(v);
+            }
+            Err(bad("no end marker"))
+        };
+        let id = |v: i32| u16::try_from(v).ok().filter(|&v| (1..115).contains(&v)).ok_or_else(|| bad("a MapID out of range"));
+        let (chassis, weapons) = (table(chassis)?, table(weapons)?);
+        let mut out = Vec::new();
+        for v in table(list)? {
+            if v > 0 {
+                out.push((id(v)?, None));
+            } else {
+                let c = chassis.get((-v - 1) as usize).copied().filter(|_| v < 0).ok_or_else(|| bad("a chassis index out of range"))?;
+                for &w in &weapons {
+                    out.push((id(c)?, Some(id(w)?)));
+                }
+            }
+        }
+        if out.is_empty() { Err(bad("empty")) } else { Ok(out) }
+    }
+
+    /// The cursor sources (`CURSORS`).
+    pub fn cursors(&self) -> Result<Vec<CursorSource>, Error> {
+        let bad = |i: usize| Error::Invalid(format!("Outpost2.exe: no cursor source {i} at {CURSORS:#x}"));
+        (0..CURSOR_COUNT)
+            .map(|i| {
+                let v = self.u32(CURSORS + 4 * i as u32).ok_or_else(|| bad(i))?;
+                match v {
+                    0x7F00..=0x7FFF if i < 3 => Ok(CursorSource::Stock(v as u16)),
+                    1..=0xFFFF if i >= 3 => Ok(CursorSource::Resource(v as u16)),
+                    0x10000.. => self.cstr(v).filter(|n| n.to_ascii_lowercase().ends_with(".ani")).map(CursorSource::File).ok_or_else(|| bad(i)),
+                    _ => Err(bad(i)),
+                }
+            })
+            .collect()
+    }
+
     /// The morale modifiers' names and percent flags (`MORALE_MODS`), in the table's order.
     pub fn morale_mods(&self) -> Result<Vec<(String, bool)>, Error> {
         let bad = || Error::Invalid(format!("Outpost2.exe: no morale modifier table at {MORALE_MODS:#x}"));
@@ -461,6 +595,10 @@ mod tests {
             ("savant", digest(&exe.savant_priority)),
             ("sounds", digest(&exe.sound_files)),
             ("looks", digest(&(exe.ambient, exe.tube_graphics))),
+            ("armor", digest(&exe.armor_values)),
+            ("music", digest(&(&exe.music_files, &exe.music_volumes))),
+            ("lists", digest(&(&exe.vehicle_factory, &exe.arachnid_factory, &exe.structure_factory))),
+            ("cursors", digest(&exe.cursors)),
         ];
         let want = GOG_DIGESTS;
         for ((name, d), (wname, w)) in got.iter().zip(want) {
@@ -468,7 +606,7 @@ mod tests {
         }
     }
 
-    const GOG_DIGESTS: [(&str, &str); 7] = [
+    const GOG_DIGESTS: [(&str, &str); 11] = [
         ("units", "04db49f3eda5addb654a4fe5e8f239282ec16420"),
         ("cells", "37a96cea973bc03eca893fd284e488647274bcfa"),
         ("research", "aaa77e9939f50f525e359c572f94554e75e93e9e"),
@@ -476,6 +614,10 @@ mod tests {
         ("savant", "d2b5bc7946f131db2e269b02deeb7c97d0a78749"),
         ("sounds", "32bf5a3acc062ebe78f7be22c8cd15be0d829871"),
         ("looks", "232b7d34b1f71a69cbaafcc698b7238104951525"),
+        ("armor", "f67eb3ee965934d822ab5a673303e6c9ab451be9"),
+        ("music", "4ad762445831287a6c4f5c673d0e2632aa17df7e"),
+        ("lists", "7ad2430a689798e08869c8afa2c193c633102227"),
+        ("cursors", "b1fc13af0753be2f0f0d865e76dcf1aef7c300ed"),
     ];
 
     #[test]
@@ -492,6 +634,15 @@ mod tests {
         assert_eq!(exe.savant_priority.len(), SAVANT_PRIORITY_LEN);
         assert_eq!(exe.units.select_sounds.len(), 53, "every vehicle and structure type");
         assert!(exe.units.select_sounds.iter().all(|&(_, id)| (id as usize) < SOUND_COUNT));
+        assert_eq!((exe.armor_value(0), exe.armor_value(5), exe.armor_value(9)), (256, 40, 256));
+        assert_eq!((exe.music_files.len(), exe.music_files[0].as_str(), exe.music_volumes.len()), (SONG_COUNT, "EDEN11", MUSIC_VOLUME_STEPS));
+        // 10 vehicles then 3 tank chassis with 11 turrets each; the Scorpion with its weapon, its 3-Pack, the Spider and
+        // its 3-Pack; the Guard Post (MapID 23) once per turret among the other structures.
+        assert_eq!((exe.vehicle_factory.len(), exe.vehicle_factory[0], exe.vehicle_factory[10]), (43, (1, None), (5, Some(59))));
+        assert_eq!(exe.arachnid_factory, [(4, Some(73)), (113, Some(73)), (3, None), (112, None)]);
+        assert_eq!(exe.structure_factory.iter().filter(|e| e.0 == 23).count(), 11);
+        assert_eq!(exe.structure_factory.len(), 33 + 11);
+        assert_eq!(exe.cursors.len(), CURSOR_COUNT);
         assert!(exe.gog_build && exe.warning().is_none());
         assert!(Arc::ptr_eq(&exe, &GameExe::of(&files).unwrap()), "read once per folder");
     }

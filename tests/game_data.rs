@@ -159,6 +159,7 @@ fn rules_and_tech_trees_parse() {
     use op2_formats::sheets::{self, Rules, Track};
     let Some(files) = game() else { return };
     let rules = Rules::load(&files).expect("rules");
+    let exe = op2_formats::exe::GameExe::of(&files).expect("Outpost2.exe tables");
     assert_eq!(rules.vehicles.len(), 17);
     assert!(rules.weapons.len() > 25 && rules.buildings.len() > 35 && rules.space.len() > 20);
     assert_eq!(rules.mines.len(), 9);
@@ -210,7 +211,7 @@ fn rules_and_tech_trees_parse() {
         assert_eq!(hp, v.hit_points.to_string(), "{code} hp");
         assert_eq!(field("moveSpeed").unwrap(), v.move_speed.to_string(), "{code} moveSpeed");
         assert_eq!(field("turnRate").unwrap(), v.turn_rate.to_string(), "{code} turnRate");
-        assert_eq!(field("armor").unwrap(), v.armor().to_string(), "{code} armor");
+        assert_eq!(field("armor").unwrap(), exe.armor_value(v.armor_class).to_string(), "{code} armor");
         assert_eq!(field("track").unwrap(), (v.track as u8).to_string(), "{code} track");
         checked += 1;
     }
