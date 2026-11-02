@@ -405,7 +405,7 @@ fn pixel(meta: &ImageMeta, palette: &Palette, index: u8) -> [u8; 4] {
 }
 
 /// Source-over blend of `src` onto `dst` (straight alpha).
-pub(crate) fn blend(dst: &mut [u8], src: [u8; 4]) {
+pub fn blend(dst: &mut [u8], src: [u8; 4]) {
     if src[3] == 255 || dst[3] == 0 {
         dst.copy_from_slice(&src);
         return;
