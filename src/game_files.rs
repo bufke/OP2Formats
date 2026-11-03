@@ -51,11 +51,11 @@ impl GameFiles {
         index_dir(&root, &root, dirs.len() - 1, false, &mut loose);
 
         let mut vols = Vec::new();
-        let mut vol_paths: Vec<_> = read_dir_sorted(&root)
+        let vol_paths: Vec<_> = read_dir_sorted(&root)
             .into_iter()
+            .map(|(p, _)| p)
             .filter(|p| p.extension().is_some_and(|e| e.eq_ignore_ascii_case("vol")))
             .collect();
-        vol_paths.sort();
         for path in vol_paths {
             let name = path.file_name().unwrap().to_string_lossy().into_owned();
             vols.push((name, VolArchive::open(&path)?));
@@ -137,8 +137,8 @@ pub fn find_in_dir(dir: &Path, name: &str) -> Result<PathBuf, Error> {
 
 /// Indexes the files in `dir` (in `top`, folder `k` of [`GameFiles::dirs`]) by lowercase name, keeping the first.
 fn index_dir(top: &Path, dir: &Path, k: usize, recursive: bool, out: &mut HashMap<String, (usize, PathBuf)>) {
-    for path in read_dir_sorted(dir) {
-        if path.is_dir() {
+    for (path, is_dir) in read_dir_sorted(dir) {
+        if is_dir {
             if recursive {
                 index_dir(top, &path, k, true, out);
             }
@@ -148,9 +148,22 @@ fn index_dir(top: &Path, dir: &Path, k: usize, recursive: bool, out: &mut HashMa
     }
 }
 
-fn read_dir_sorted(dir: &Path) -> Vec<PathBuf> {
-    let mut paths: Vec<PathBuf> =
-        fs::read_dir(dir).into_iter().flatten().flatten().map(|e| e.path()).collect();
+/// A folder's entries, sorted, each with whether it is a folder. The listing gives the type on most systems (no stat
+/// per file: indexing a game folder is part of every mission start); a link is followed.
+fn read_dir_sorted(dir: &Path) -> Vec<(PathBuf, bool)> {
+    let mut paths: Vec<(PathBuf, bool)> = fs::read_dir(dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| {
+            let path = e.path();
+            let is_dir = match e.file_type() {
+                Ok(t) if !t.is_symlink() => t.is_dir(),
+                _ => path.is_dir(),
+            };
+            (path, is_dir)
+        })
+        .collect();
     paths.sort();
     paths
 }
