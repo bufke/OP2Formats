@@ -32,6 +32,7 @@ pub mod testdata;
 pub mod tile_palette;
 pub mod tileset;
 pub mod units;
+pub mod utc;
 pub mod virmask;
 pub mod vol;
 
