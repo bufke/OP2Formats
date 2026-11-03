@@ -194,4 +194,30 @@ mod tests {
         assert_eq!(read("x.map").unwrap(), b"map");
         let _ = fs::remove_dir_all(&root);
     }
+
+    /// A linked folder is indexed as a folder and a linked file as a file (the listing's own type is the link's).
+    #[cfg(unix)]
+    #[test]
+    fn links_are_followed() {
+        use std::os::unix::fs::symlink;
+        let root = std::env::temp_dir().join(format!("op2-game-files-links-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        let elsewhere = root.join("elsewhere");
+        fs::create_dir_all(elsewhere.join("maps")).unwrap();
+        fs::write(elsewhere.join("maps/linked.map"), b"linked").unwrap();
+        fs::write(elsewhere.join("real.vol"), b"not a vol").unwrap();
+        let game = root.join("game");
+        fs::create_dir_all(game.join("OPU")).unwrap();
+        symlink(elsewhere.join("maps"), game.join("OPU/maps")).unwrap();
+        symlink(elsewhere.join("real.vol"), game.join("sheets.vol")).unwrap();
+        assert_eq!(read_dir_sorted(&game), vec![(game.join("OPU"), true), (game.join("sheets.vol"), false)]);
+        assert_eq!(read_dir_sorted(&game.join("OPU")), vec![(game.join("OPU/maps"), true)]);
+        let maps = game.join("OPU/maps");
+        let mut index = HashMap::new();
+        index_dir(&maps, &maps, 0, true, &mut index);
+        assert_eq!(index.get("linked.map"), Some(&(0, PathBuf::from("linked.map"))));
+        // GameFiles::open takes the linked .vol as an archive (and fails on its bytes, as on any bad volume).
+        assert!(GameFiles::open(&game).is_err());
+        let _ = fs::remove_dir_all(&root);
+    }
 }
