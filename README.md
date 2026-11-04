@@ -12,6 +12,7 @@ cutscenes, tables in `Outpost2.exe`, and the GOG and OPU installers.
 | Folder | What |
 |---|---|
 | `op2-formats/` | The Rust library: the readers themselves |
+| `op2-opm/` | Reads and writes OP2MissionEditor's `.opm` mission files (see its [README](op2-opm/README.md)) |
 | `op2formats-c/` | A C interface for C, C++ and other languages: `op2formats.dll` / `.so` / `.dylib` and a static library, with the header `include/op2formats.h` (see its [README](op2formats-c/README.md)) |
 
 ## Where it comes from

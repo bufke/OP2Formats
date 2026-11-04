@@ -33,6 +33,9 @@
 // Bytes of one 32x32 tile as RGBA.
 #define OP2F_TILE_RGBA_BYTES 4096
 
+// An enum field whose name has no engine number (an unknown name, or an absent value).
+#define OP2F_OPM_UNKNOWN (-2147483647 - 1)
+
 // Bytes of one terrain type record (`op2f_map_terrain_type`), kept raw.
 #define OP2F_TERRAIN_TYPE_BYTES 264
 
@@ -167,6 +170,55 @@ typedef enum Op2fCompression {
   OP2F_COMPRESSION_LZH,
   OP2F_COMPRESSION_UNKNOWN,
 } Op2fCompression;
+
+// A text of the mission.
+typedef enum Op2fOpmText {
+  OP2F_OPM_TEXT_SDK_VERSION,
+  OP2F_OPM_TEXT_DESCRIPTION,
+  // The `.map` file the mission plays on.
+  OP2F_OPM_TEXT_MAP_NAME,
+  // The tech tree file, e.g. "MULTITEK.TXT".
+  OP2F_OPM_TEXT_TECH_TREE_NAME,
+  // The mission type's name, e.g. "Colony".
+  OP2F_OPM_TEXT_MISSION_TYPE,
+  // The prefix OP2MissionEditor gives the file name, e.g. "ml2", "c".
+  OP2F_OPM_TEXT_FILE_PREFIX,
+} Op2fOpmText;
+
+// A text of a player.
+typedef enum Op2fOpmPlayerText {
+  // "Blue", "Red", ...
+  OP2F_OPM_PLAYER_TEXT_COLOR,
+  // "None", "Balanced", "LaunchStarship", ...
+  OP2F_OPM_PLAYER_TEXT_BOT_TYPE,
+  // The AI implementation ("AIv2", "TechCor"); `OP2F_STATUS_NOT_FOUND` when unset.
+  OP2F_OPM_PLAYER_TEXT_AI_IMPL,
+} Op2fOpmPlayerText;
+
+// What a unit carries, decoded from its `CargoType` and `CargoAmount`.
+typedef enum Op2fOpmCargo {
+  OP2F_OPM_CARGO_NONE,
+  // Ore, metal, food or rubble in a truck: `cargo` is the SDK's `TruckCargo` number (1-7), `cargo_amount` how much.
+  OP2F_OPM_CARGO_TRUCK,
+  // A starship module: `cargo` is its `map_id` number (88-104).
+  OP2F_OPM_CARGO_STARSHIP_MODULE,
+  OP2F_OPM_CARGO_WRECKAGE,
+  OP2F_OPM_CARGO_GENE_BANK,
+  // A combat unit's weapon: its name is the `CargoType` text.
+  OP2F_OPM_CARGO_WEAPON,
+  // Something else: see the `CargoType` text.
+  OP2F_OPM_CARGO_OTHER,
+} Op2fOpmCargo;
+
+// A text of a unit.
+typedef enum Op2fOpmUnitText {
+  // The unit type's `map_id` name, e.g. "CargoTruck", "CommandCenter".
+  OP2F_OPM_UNIT_TEXT_TYPE_ID,
+  // As written: "None", a truck cargo, a weapon, "90" for a gene bank.
+  OP2F_OPM_UNIT_TEXT_CARGO_TYPE,
+  // "East", "SouthEast", ...
+  OP2F_OPM_UNIT_TEXT_DIRECTION,
+} Op2fOpmUnitText;
 
 // How fast units cross a cell type, in coarse buckets (for overlays).
 typedef enum Op2fSpeed {
@@ -311,6 +363,9 @@ typedef struct Op2fMenu Op2fMenu;
 // A Nullsoft (NSIS 3, LZMA) installer's files, as OPU's installer is built.
 typedef struct Op2fNsis Op2fNsis;
 
+// A `.opm` mission.
+typedef struct Op2fOpm Op2fOpm;
+
 // What an OPU install did.
 typedef struct Op2fOpuInstalled Op2fOpuInstalled;
 
@@ -418,6 +473,112 @@ typedef struct Op2fVolEntryInfo {
   // The size in the index: for compressed entries the stored size, not the decoded one.
   uint32_t size;
 } Op2fVolEntryInfo;
+
+// The level details' numbers.
+typedef struct Op2fOpmLevel {
+  // The engine's mission type (-8 colony, -1 last one standing, ... -7 auto demo), or `OP2F_OPM_UNKNOWN`.
+  int32_t mission_type;
+  int32_t num_players;
+  int32_t max_tech_level;
+  bool unit_only_mission;
+  // 1 + the alternative variants: the `variant` indices are 0 to this - 1.
+  size_t variant_count;
+} Op2fOpmLevel;
+
+// A player slot.
+typedef struct Op2fOpmPlayer {
+  int32_t id;
+  bool is_eden;
+  bool is_human;
+  // The engine's colour number (0 blue ... 7 white), or `OP2F_OPM_UNKNOWN`.
+  int32_t color;
+  size_t ally_count;
+  // Per-difficulty resources (`difficulty` 0 to this - 1).
+  size_t difficulty_count;
+} Op2fOpmPlayer;
+
+// A player's starting state (`Resources`, or one of its `DifficultyResources`).
+typedef struct Op2fOpmResources {
+  int32_t center_x;
+  int32_t center_y;
+  int32_t common_ore;
+  int32_t rare_ore;
+  int32_t food;
+  int32_t kids;
+  int32_t workers;
+  int32_t scientists;
+  int32_t solar_satellites;
+  int32_t tech_level;
+  bool free_morale;
+  size_t completed_research_count;
+  size_t unit_count;
+  size_t wall_tube_count;
+  size_t trigger_count;
+} Op2fOpmResources;
+
+// A placed unit.
+typedef struct Op2fOpmUnit {
+  int32_t id;
+  int32_t x;
+  int32_t y;
+  // The engine's facing (0 east ... 7 north-east), or `OP2F_OPM_UNKNOWN`.
+  int32_t direction;
+  // 0 to 1.
+  double health;
+  bool lights;
+  enum Op2fOpmCargo cargo_kind;
+  // See `Op2fOpmCargo`; 0 otherwise.
+  int32_t cargo;
+  int32_t cargo_amount;
+  // An ore mine's yield and variant (-1 random, 0.. the engine's), or `OP2F_OPM_UNKNOWN` when not set.
+  int32_t bar_yield;
+  int32_t bar_variant;
+  bool create_wall;
+  bool ignore_layout;
+  bool has_max_tubes;
+  int32_t max_tubes;
+  int32_t min_distance;
+  int32_t spawn_distance;
+} Op2fOpmUnit;
+
+// A variant's game setup (`TethysGame`, or one of its `TethysDifficulties`).
+typedef struct Op2fOpmGame {
+  bool daylight_everywhere;
+  bool daylight_moves;
+  int32_t initial_light_level;
+  // Where the music loops back to in `op2f_opm_songs`.
+  int32_t repeat_start_index;
+  size_t song_count;
+  size_t beacon_count;
+  size_t marker_count;
+  size_t wreckage_count;
+  // Walls and tubes belonging to no player (some SDK 3.0 files).
+  size_t wall_tube_count;
+  size_t trigger_count;
+} Op2fOpmGame;
+
+// A beacon.
+typedef struct Op2fOpmBeacon {
+  int32_t id;
+  int32_t x;
+  int32_t y;
+  // -1 random, 0 common, 1 rare; `OP2F_OPM_UNKNOWN` for another name.
+  int32_t ore_type;
+  // -1 random, 0 3-bar, 1 2-bar, 2 1-bar.
+  int32_t bar_yield;
+  // -1 random, 0-2 variants 1-3.
+  int32_t bar_variant;
+} Op2fOpmBeacon;
+
+// A piece of wreckage.
+typedef struct Op2fOpmWreckage {
+  int32_t id;
+  int32_t x;
+  int32_t y;
+  // The tech or starship part's number, e.g. 8000.
+  int32_t tech_id;
+  bool is_visible;
+} Op2fOpmWreckage;
 
 // A tile group (the editor's named blocks of tiles): its size in tiles.
 typedef struct Op2fTileGroupInfo {
@@ -1587,6 +1748,239 @@ enum Op2fStatus op2f_vol_read_stored(const struct Op2fVol *vol,
 // # Safety
 // `data` is `len` readable bytes; `out` writable.
 enum Op2fStatus op2f_lzh_decompress(const uint8_t *data, size_t len, struct Op2fBytes **out);
+
+// Reads an `.opm` file. Any known writer's layout reads: OP2MissionEditor's, the SDK tools', the older SDK layout,
+// with comments, trailing commas, `null`s and members in any order.
+//
+// # Safety
+// `path` is a string; `out` writable.
+enum Op2fStatus op2f_opm_open(const char *path,
+                              struct Op2fOpm **out);
+
+// Parses `.opm` text (UTF-8, with or without a byte-order mark).
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_opm_parse(const uint8_t *data, size_t len, struct Op2fOpm **out);
+
+// # Safety
+// `opm` is NULL or a live handle, not used afterwards.
+void op2f_opm_free(struct Op2fOpm *opm);
+
+// The mission as `.opm` text in OP2MissionEditor's layout (tabs, CRLF, members in alphabetical order, every member
+// written), which the editor opens. Members the model doesn't know are written back as they were read. It is also
+// the canonical form to read with a JSON library: names in the SDK's spelling, the older layout moved into
+// `MasterVariant`.
+//
+// # Safety
+// `opm` is a live handle; `out` writable.
+enum Op2fStatus op2f_opm_json(const struct Op2fOpm *opm,
+                              struct Op2fBytes **out);
+
+// Writes the mission to a file, as `op2f_opm_json` gives it.
+//
+// # Safety
+// `opm` is a live handle; `path` a string.
+enum Op2fStatus op2f_opm_save(const struct Op2fOpm *opm, const char *path);
+
+// # Safety
+// `opm` is a live handle; `out` writable.
+enum Op2fStatus op2f_opm_level(const struct Op2fOpm *opm, struct Op2fOpmLevel *out);
+
+// # Safety
+// `opm` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opm_text(const struct Op2fOpm *opm,
+                              enum Op2fOpmText field,
+                              char *buf,
+                              size_t cap,
+                              size_t *len);
+
+// Variant `variant`'s name; `OP2F_STATUS_NOT_FOUND` when it has none (the master variant's is `null`).
+//
+// # Safety
+// `opm` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opm_variant_name(const struct Op2fOpm *opm,
+                                      size_t variant,
+                                      char *buf,
+                                      size_t cap,
+                                      size_t *len);
+
+// Number of difficulty levels a variant has additions for (`TethysDifficulties`); `difficulty` runs to this - 1.
+//
+// # Safety
+// `opm` is NULL or a live handle.
+size_t op2f_opm_difficulty_count(const struct Op2fOpm *opm,
+                                 size_t variant);
+
+// Number of players in a variant.
+//
+// # Safety
+// `opm` is NULL or a live handle.
+size_t op2f_opm_player_count(const struct Op2fOpm *opm, size_t variant);
+
+// # Safety
+// `opm` is a live handle; `out` writable.
+enum Op2fStatus op2f_opm_player(const struct Op2fOpm *opm,
+                                size_t variant,
+                                size_t player,
+                                struct Op2fOpmPlayer *out);
+
+// The ids of the players a player is allied with: `ally_count` values into `out`, which holds `count`.
+//
+// # Safety
+// `opm` is a live handle; `out` is `count` writable values.
+enum Op2fStatus op2f_opm_player_allies(const struct Op2fOpm *opm,
+                                       size_t variant,
+                                       size_t player,
+                                       int32_t *out,
+                                       size_t count);
+
+// # Safety
+// `opm` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opm_player_text(const struct Op2fOpm *opm,
+                                     size_t variant,
+                                     size_t player,
+                                     enum Op2fOpmPlayerText field,
+                                     char *buf,
+                                     size_t cap,
+                                     size_t *len);
+
+// # Safety
+// `opm` is a live handle; `out` writable.
+enum Op2fStatus op2f_opm_resources(const struct Op2fOpm *opm,
+                                   size_t variant,
+                                   size_t player,
+                                   int32_t difficulty,
+                                   struct Op2fOpmResources *out);
+
+// The starting morale level's name ("Good", "Excellent", ...).
+//
+// # Safety
+// `opm` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opm_morale(const struct Op2fOpm *opm,
+                                size_t variant,
+                                size_t player,
+                                int32_t difficulty,
+                                char *buf,
+                                size_t cap,
+                                size_t *len);
+
+// The tech ids researched at the start: `completed_research_count` values into `out`, which holds `count`.
+//
+// # Safety
+// `opm` is a live handle; `out` is `count` writable values.
+enum Op2fStatus op2f_opm_completed_research(const struct Op2fOpm *opm,
+                                            size_t variant,
+                                            size_t player,
+                                            int32_t difficulty,
+                                            int32_t *out,
+                                            size_t count);
+
+// Unit `unit` of a player's starting state.
+//
+// # Safety
+// `opm` is a live handle; `out` writable.
+enum Op2fStatus op2f_opm_unit(const struct Op2fOpm *opm,
+                              size_t variant,
+                              size_t player,
+                              int32_t difficulty,
+                              size_t unit,
+                              struct Op2fOpmUnit *out);
+
+// # Safety
+// `opm` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opm_unit_text(const struct Op2fOpm *opm,
+                                   size_t variant,
+                                   size_t player,
+                                   int32_t difficulty,
+                                   size_t unit,
+                                   enum Op2fOpmUnitText field,
+                                   char *buf,
+                                   size_t cap,
+                                   size_t *len);
+
+// Wall or tube `index` of a player's starting state: its tile and, into `buf`, its type ("Tube", "Wall",
+// "LavaWall", "MicrobeWall").
+//
+// # Safety
+// `opm` is a live handle; `x` and `y` writable; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opm_wall_tube(const struct Op2fOpm *opm,
+                                   size_t variant,
+                                   size_t player,
+                                   int32_t difficulty,
+                                   size_t index,
+                                   int32_t *x,
+                                   int32_t *y,
+                                   char *buf,
+                                   size_t cap,
+                                   size_t *len);
+
+// # Safety
+// `opm` is a live handle; `out` writable.
+enum Op2fStatus op2f_opm_game(const struct Op2fOpm *opm,
+                              size_t variant,
+                              int32_t difficulty,
+                              struct Op2fOpmGame *out);
+
+// The music's song ids, in order: `song_count` values into `out`, which holds `count`.
+//
+// # Safety
+// `opm` is a live handle; `out` is `count` writable values.
+enum Op2fStatus op2f_opm_songs(const struct Op2fOpm *opm,
+                               size_t variant,
+                               int32_t difficulty,
+                               int32_t *out,
+                               size_t count);
+
+// Beacon `index` and, into `buf`, its kind ("MiningBeacon", "Fumarole", "MagmaVent").
+//
+// # Safety
+// `opm` is a live handle; `out` writable; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opm_beacon(const struct Op2fOpm *opm,
+                                size_t variant,
+                                int32_t difficulty,
+                                size_t index,
+                                struct Op2fOpmBeacon *out,
+                                char *buf,
+                                size_t cap,
+                                size_t *len);
+
+// Marker `index`: its id and tile and, into `buf`, its type ("Circle", "DNA", "Beaker", ...).
+//
+// # Safety
+// `opm` is a live handle; `id`, `x` and `y` writable; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opm_marker(const struct Op2fOpm *opm,
+                                size_t variant,
+                                int32_t difficulty,
+                                size_t index,
+                                int32_t *id,
+                                int32_t *x,
+                                int32_t *y,
+                                char *buf,
+                                size_t cap,
+                                size_t *len);
+
+// # Safety
+// `opm` is a live handle; `out` writable.
+enum Op2fStatus op2f_opm_wreckage(const struct Op2fOpm *opm,
+                                  size_t variant,
+                                  int32_t difficulty,
+                                  size_t index,
+                                  struct Op2fOpmWreckage *out);
+
+// Neutral wall or tube `index` of a variant's game setup, as `op2f_opm_wall_tube`.
+//
+// # Safety
+// `opm` is a live handle; `x` and `y` writable; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_opm_game_wall_tube(const struct Op2fOpm *opm,
+                                        size_t variant,
+                                        int32_t difficulty,
+                                        size_t index,
+                                        int32_t *x,
+                                        int32_t *y,
+                                        char *buf,
+                                        size_t cap,
+                                        size_t *len);
 
 // Number of tile groups.
 //

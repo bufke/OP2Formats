@@ -25,6 +25,11 @@ State and plan for OP2Formats. Newest first; keep it short and current.
   `OP2Formats::OP2Formats` / `::shared` / `::static` and `op2formats_copy_runtime`; installs a
   `find_package` config (`cmake/`). Checked with MSVC 2022 and CMake 3.31 (Ninja and the
   Visual Studio generator, Debug and Release, shared and static, installed and found).
+- `op2-opm/` (2026-11-04): reads and writes `.opm` missions (see its README); in the C
+  interface as `op2f_opm_*` (299 functions in all now, 32 structs checked the same size in
+  C, C++ and Rust). Fixtures: two editor-saved missions from the user's own projects.
+  Next for it: effective mission (variant + difficulty merged), coordinates, unit art names,
+  validation; setters in the C interface (C code edits through the canonical JSON for now).
 
 ## Next steps
 

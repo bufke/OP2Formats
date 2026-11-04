@@ -24,3 +24,4 @@ fetch-opu = ["opu", "op2-formats/fetch-opu"]
 
 [dependencies]
 op2-formats = { path = "../op2-formats" }
+op2-opm = { path = "../op2-opm" }
