@@ -55,6 +55,8 @@ struct Section {
     vsize: u32,
     rsize: u32,
     raw: u32,
+    /// IMAGE_SCN_* characteristics.
+    flags: u32,
 }
 
 /// SoundManager's file names, one `char*` per SoundID (0x4E0170, read by the loader at 0x47E015).
@@ -270,7 +272,7 @@ impl Exe {
             let o = pe + 24 + opt + 40 * i;
             let f = |k: usize| u32_at(o + k).ok_or_else(bad);
             let name = data.get(o..o + 8).and_then(|n| n.try_into().ok()).ok_or_else(bad)?;
-            sections.push(Section { name, va: base.wrapping_add(f(12)?), vsize: f(8)?, rsize: f(16)?, raw: f(20)? });
+            sections.push(Section { name, va: base.wrapping_add(f(12)?), vsize: f(8)?, rsize: f(16)?, raw: f(20)?, flags: f(36)? });
         }
         Ok(Self { path: "Outpost2.exe".into(), data, base, sections })
     }
@@ -325,6 +327,29 @@ impl Exe {
     pub(crate) fn bytes(&self, va: u32, len: usize) -> Option<&[u8]> {
         let o = self.offset(va, len)?;
         self.data.get(o..o + len)
+    }
+
+    /// The loaded image's constant bytes from `va` into `out`: the code and read-only sections as the file holds them
+    /// (what the game's code and constant tables are before anything runs), zeros elsewhere (writable data, whose
+    /// values the running game owns; discarded sections; past a section's raw data). False if no byte of `out` came
+    /// from such a section.
+    pub fn image_bytes(&self, va: u32, out: &mut [u8]) -> bool {
+        const CODE: u32 = 0x20;
+        const DISCARDABLE: u32 = 0x0200_0000;
+        const WRITE: u32 = 0x8000_0000;
+        out.fill(0);
+        let mut any = false;
+        for s in self.sections.iter().filter(|s| s.flags & DISCARDABLE == 0 && (s.flags & CODE != 0 || s.flags & WRITE == 0)) {
+            let (lo, hi) = (va.max(s.va) as u64, (va as u64 + out.len() as u64).min(s.va as u64 + s.rsize.min(s.vsize.max(s.rsize)) as u64));
+            if lo >= hi {
+                continue;
+            }
+            let src = s.raw as u64 + (lo - s.va as u64);
+            let Some(bytes) = self.data.get(src as usize..(src + hi - lo) as usize) else { continue };
+            out[(lo - va as u64) as usize..(hi - va as u64) as usize].copy_from_slice(bytes);
+            any = true;
+        }
+        any
     }
 
     /// Up to `max_len` bytes from `va`, fewer at the end of its section.
