@@ -180,6 +180,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "op2-mapjson"
+version = "0.1.0"
+dependencies = [
+ "op2-formats",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
+
+[[package]]
 name = "op2-opm"
 version = "0.1.0"
 dependencies = [
@@ -193,6 +203,7 @@ name = "op2formats-c"
 version = "0.1.0"
 dependencies = [
  "op2-formats",
+ "op2-mapjson",
  "op2-opm",
 ]
 

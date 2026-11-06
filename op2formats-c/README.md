@@ -26,6 +26,7 @@ It covers all of op2-formats, one source file per area:
 | `Outpost2.exe` | the tables read from it: sound files, Savant lengths, the ambient animation sequence, tube graphics; any value or string | `exe.rs` |
 | Windows resources | the game's DLLs: bitmaps (with palettes), cursors and icons, string tables, dialogs, menus, version strings; `.bmp`, `.cur`, `.ico` and `.ani` files | `resources.rs` |
 | Installers | GOG's offline installer (feature `inno`), OPU's installer and its install (`opu`), downloading OPU (`fetch-opu`) | `installers.rs` |
+| JSON maps | `.map` to and from OP2MapJsonTools' JSON (PerRowPadded): parse, write, header texts, to an `Op2fMap` (with or without a base map) and from one | `mapjson.rs` |
 | Missions (`.opm`) | read or write OP2MissionEditor's JSON missions: level details, variants, players and their resources, units (with cargo decoded), walls and tubes, beacons, markers, wreckage, music; the whole mission as canonical JSON for the rest (triggers, regions, disasters, layouts) | `opm.rs` |
 | Lists | string lists, tables and pairs the other calls return | `common.rs` |
 

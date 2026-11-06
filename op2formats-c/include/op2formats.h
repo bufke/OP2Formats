@@ -162,6 +162,15 @@ typedef enum Op2fOpuText {
   OP2F_OPU_TEXT_CREDIT,
 } Op2fOpuText;
 
+// A text of a JSON map's header.
+typedef enum Op2fMapJsonText {
+  // The `.map` file's name (`map`).
+  OP2F_MAP_JSON_TEXT_MAP_FILE,
+  OP2F_MAP_JSON_TEXT_NAME,
+  OP2F_MAP_JSON_TEXT_AUTHOR,
+  OP2F_MAP_JSON_TEXT_NOTES,
+} Op2fMapJsonText;
+
 // How a `.vol` entry is stored. Only `NONE` and `LZH` are read (the game's archives use nothing else).
 typedef enum Op2fCompression {
   OP2F_COMPRESSION_NONE,
@@ -354,6 +363,9 @@ typedef struct Op2fInstallSearch Op2fInstallSearch;
 // A parsed `.map` file.
 typedef struct Op2fMap Op2fMap;
 
+// A JSON map.
+typedef struct Op2fMapJson Op2fMapJson;
+
 // The tilesets a map uses, loaded from the game, for drawing it.
 typedef struct Op2fMapTilesets Op2fMapTilesets;
 
@@ -464,6 +476,21 @@ typedef struct Op2fTileMapping {
   uint16_t animation_count;
   uint16_t animation_delay;
 } Op2fTileMapping;
+
+// A JSON map's size and contents.
+typedef struct Op2fMapJsonInfo {
+  uint32_t width;
+  uint32_t height;
+  // Tileset slots up to the last used one.
+  size_t source_count;
+  size_t mapping_count;
+  size_t terrain_type_count;
+  // Whether the JSON sets a clip rect; without one, the map gets the default (x1 32, or 0 on a 512-wide map;
+  // y1 0; x2 x1 + width - 1; y2 height - 2).
+  bool has_clip_rect;
+  // x1, y1, x2, y2: the JSON's, or the default.
+  int32_t clip_rect[4];
+} Op2fMapJsonInfo;
 
 // A `.vol` entry's storage.
 typedef struct Op2fVolEntryInfo {
@@ -1684,6 +1711,78 @@ enum Op2fStatus op2f_tileset_tile_rgba(const struct Op2fTileset *tileset,
                                        uint32_t index,
                                        uint8_t *out,
                                        size_t cap);
+
+// Parses JSON map text. Rows can be padded or not; the older flat arrays (OP2MapJsonTools' "Original" format)
+// aren't read. The grids must match the header's size.
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_mapjson_parse(const uint8_t *data,
+                                   size_t len,
+                                   struct Op2fMapJson **out);
+
+// Reads a JSON map file.
+//
+// # Safety
+// `path` is a string; `out` writable.
+enum Op2fStatus op2f_mapjson_open(const char *path, struct Op2fMapJson **out);
+
+// The JSON of a map. `map_file` (e.g. "cm01.map") goes in the header's `map` and, without its extension, `name`;
+// author and notes start empty (`op2f_mapjson_set_text`).
+//
+// # Safety
+// `map` is a live handle; `map_file` a string; `out` writable.
+enum Op2fStatus op2f_mapjson_from_map(const struct Op2fMap *map,
+                                      const char *map_file,
+                                      struct Op2fMapJson **out);
+
+// # Safety
+// `json` is NULL or a live handle, not used afterwards.
+void op2f_mapjson_free(struct Op2fMapJson *json);
+
+// The JSON text, PerRowPadded as OP2MapJsonTools writes it (two-space indents, CRLF, one line per row).
+//
+// # Safety
+// `json` is a live handle; `out` writable.
+enum Op2fStatus op2f_mapjson_write(const struct Op2fMapJson *json,
+                                   struct Op2fBytes **out);
+
+// Writes the JSON text to a file.
+//
+// # Safety
+// `json` is a live handle; `path` a string.
+enum Op2fStatus op2f_mapjson_save(const struct Op2fMapJson *json, const char *path);
+
+// # Safety
+// `json` is a live handle; `out` writable.
+enum Op2fStatus op2f_mapjson_info(const struct Op2fMapJson *json, struct Op2fMapJsonInfo *out);
+
+// # Safety
+// `json` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_mapjson_text(const struct Op2fMapJson *json,
+                                  enum Op2fMapJsonText field,
+                                  char *buf,
+                                  size_t cap,
+                                  size_t *len);
+
+// Sets a header text.
+//
+// # Safety
+// `json` is a live handle not used by another thread meanwhile; `value` a string.
+enum Op2fStatus op2f_mapjson_set_text(struct Op2fMapJson *json,
+                                      enum Op2fMapJsonText field,
+                                      const char *value);
+
+// The map a JSON map describes. What the JSON doesn't carry (the version tag, the empty tileset slots after the
+// last used one, tile groups, and the tile words' bits above the mapping index) comes from `base` when it isn't
+// NULL (a map of the same size, e.g. the one the JSON came from), else from the shipped maps' defaults (version
+// 0x1011, 512 tileset slots, no tile groups). The width must be a power of two from 32 to 1024.
+//
+// # Safety
+// `json` is a live handle; `base` NULL or a live handle; `out` writable.
+enum Op2fStatus op2f_mapjson_to_map(const struct Op2fMapJson *json,
+                                    const struct Op2fMap *base,
+                                    struct Op2fMap **out);
 
 // Opens a `.vol` archive by path. Entries are read from the file when asked for.
 //

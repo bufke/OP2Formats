@@ -33,6 +33,11 @@ State and plan for OP2Formats. Newest first; keep it short and current.
   C, C++ and Rust). Fixtures: two editor-saved missions from the user's own projects.
   Next for it: effective mission (variant + difficulty merged), coordinates, unit art names,
   validation; setters in the C interface (C code edits through the canonical JSON for now).
+- `op2-mapjson/` (2026-11-06): `.map` to and from OP2MapJsonTools' JSON, PerRowPadded only (the user's choice: the
+  format all their tools are moving to). Every shipped map round-trips to the same `.map` bytes; the user's
+  `map1.json` (not committed; `OP2_MAPJSON`) writes back byte for byte. JSON to `.map` needs no blank templates and
+  uses the JSON's own mappings and terrain types (OP2MapJsonTools keeps the template's). C interface
+  `op2f_mapjson_*`: 309 functions in all, 33 structs checked in C, C++ and Rust.
 
 ## Next steps
 
