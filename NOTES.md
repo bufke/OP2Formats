@@ -42,15 +42,32 @@ State and plan for OP2Formats. Newest first; keep it short and current.
 ## Next steps
 
 1. **C interface**: test the GOG installer functions with GOG's offline installer. Try MinGW
-   (`x86_64-pc-windows-gnu`, what op2remake's Qt build uses; the CMake branch for it is
-   written but untried) and the C/CMake side on Linux and macOS.
+   (`x86_64-pc-windows-gnu`, what op2remake's Qt build uses; Qt 6.12's MinGW is now on the dev
+   machine; the CMake branch for it is written but untried) and the C/CMake side on Linux and
+   macOS.
 2. **CI**: add the C side (cbindgen's output matches the committed header, the CMake example
    builds) and a MinGW job.
-3. **Upstream**: tell bufke about this repo; send reader fixes to op2-rs as merge requests;
+3. **Tile group JSON** (IDEAS.md): not in OP2MapJsonTools' format yet; agree a layout first.
+4. **op2-opm, next phase**: effective mission (a variant and difficulty merged onto the
+   master), `.opm` to map and in-game coordinates, unit names to unit art, validation against
+   the map and tech tree, setters in the C interface.
+5. **Upstream**: tell bufke about this repo; send reader fixes to op2-rs as merge requests;
    to take in upstream changes, copy the folder again from a newer op2-rs commit and update
    the commit named in the README.
-4. **Name**: the crate is still `op2-formats`. Decide before publishing anywhere (crates.io
+6. **Name**: the crate is still `op2-formats`. Decide before publishing anywhere (crates.io
    needs a unique name; `outpost2-formats` was one idea).
+
+## Checks before a commit
+
+- `cargo clippy --workspace --all-targets -- -D warnings`, also with `--no-default-features`
+  and `--all-features`.
+- `cargo test --workspace` and `cargo test --workspace --all-features` without game data (as CI
+  runs them), and with `OP2_DIR` + `OP2_REQUIRE_DATA=1` per crate (`-p op2-opm -p op2-mapjson
+  -p op2formats-c`; op2-formats' one expected failure stops the rest). Sample files outside
+  the repo: `OP2_OPM_DIR`, `OP2_MAPJSON`, `OP2_OPU_INSTALLER` (see each crate's README).
+- After changing the C interface: regenerate the header with cbindgen, check it compiles as C
+  and C++ with warnings as errors, that every struct has the same size and alignment in C,
+  C++ and Rust, and that the DLL exports every function the header declares.
 
 ## License note
 
