@@ -471,6 +471,63 @@ fn installers_without_installers() {
     assert_ne!(unsafe { op2f_nsis_parse(b"junk".as_ptr(), 4, &mut null_mut()) }, Op2fStatus::Ok);
     let status = unsafe { op2f_inno_open(c("/no/such/setup.exe").as_ptr(), &mut null_mut()) };
     assert!(matches!(status, Op2fStatus::NotFound | Op2fStatus::Io), "{status:?}: {}", last_error());
-    let status = unsafe { op2f_opu_download(c(".").as_ptr(), None, null_mut(), null_mut(), 0, null_mut()) };
-    assert_eq!(status, Op2fStatus::Unsupported, "a default build has no downloader");
+    // Only without the downloader: with it, this would fetch OPU's installer from outpost2.net (never into the repo).
+    #[cfg(not(feature = "fetch-opu"))]
+    {
+        let status = unsafe { op2f_opu_download(c(".").as_ptr(), None, null_mut(), null_mut(), 0, null_mut()) };
+        assert_eq!(status, Op2fStatus::Unsupported, "a build without fetch-opu has no downloader");
+    }
+}
+
+/// Counts progress calls (`user` points at a `[u64; 3]`: calls, last stage, last done).
+unsafe extern "C" fn count_progress(user: *mut std::ffi::c_void, stage: u32, done: u64, _total: u64) {
+    let seen = unsafe { &mut *(user as *mut [u64; 3]) };
+    *seen = [seen[0] + 1, stage as u64, done];
+}
+
+#[test]
+fn opu_installer_from_op2_opu_installer() {
+    // OPU's official installer (OPUInstaller-1.4.1.exe from outpost2.net), named by $OP2_OPU_INSTALLER.
+    let Some(installer) = std::env::var_os("OP2_OPU_INSTALLER").map(|p| p.into_string().unwrap()) else {
+        eprintln!("skipping: set OP2_OPU_INSTALLER to OPUInstaller-1.4.1.exe");
+        return;
+    };
+    let data = std::fs::read(&installer).unwrap();
+    ok(unsafe { op2f_opu_verify_package(data.as_ptr(), data.len()) });
+    assert_eq!(data.len() as u64, op2f_opu_package_size());
+
+    // The NSIS reader lists the files the script installs and reads them.
+    let nsis = out(|o| unsafe { op2f_nsis_parse(data.as_ptr(), data.len(), o) });
+    let files = list(out(|o| unsafe { op2f_nsis_files(nsis, o) }));
+    assert!(files.len() > 100, "{} files", files.len());
+    let readme = files.iter().position(|f| f.eq_ignore_ascii_case(r"$INSTDIR\OPU\README.md")).expect("OPU's README.md");
+    let text = bytes(out(|o| unsafe { op2f_nsis_read(nsis, readme, o) }));
+    assert!(String::from_utf8_lossy(&text).contains("OPU"), "the README mentions OPU");
+    unsafe { op2f_nsis_free(nsis) };
+
+    // Installing into a scratch folder (never the real data folder) for the game at $OP2_DIR.
+    let Some(game) = game_dir() else { return };
+    let target = std::env::temp_dir().join(format!("op2formats-opu-test-{}", std::process::id()));
+    let mut seen = [0u64; 3];
+    let installed = out(|o| unsafe {
+        op2f_opu_install(
+            c(&installer).as_ptr(),
+            c(&game).as_ptr(),
+            c(target.to_str().unwrap()).as_ptr(),
+            Some(count_progress),
+            (&mut seen as *mut [u64; 3]).cast(),
+            o,
+        )
+    });
+    let mut written = 0;
+    let dir = string(|b, c, l| unsafe { op2f_opu_installed_dir(installed, &mut written, b, c, l) });
+    assert!(written > 100 && seen[0] > 0, "{written} files, {} progress calls", seen[0]);
+    let check = out(|o| unsafe { op2f_install_check(c(&game).as_ptr(), false, o) });
+    let digest = string(|b, c, l| unsafe { op2f_opu_tree_digest(self::c(&dir).as_ptr(), b, c, l) });
+    assert!(!digest.is_empty());
+    let found = string(|b, c, l| unsafe { op2f_opu_find_folder(self::c(target.to_str().unwrap()).as_ptr(), b, c, l) });
+    assert!(std::path::Path::new(&found).is_dir(), "{found}");
+    eprintln!("installed {written} files into {dir}");
+    unsafe { (op2f_install_check_free(check), op2f_opu_installed_free(installed)) };
+    std::fs::remove_dir_all(&target).unwrap();
 }
