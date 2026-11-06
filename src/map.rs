@@ -188,7 +188,9 @@ impl Map {
         let tiles = (0..tile_count).map(|_| r.u32()).collect::<Result<_, _>>()?;
         let clip_rect = [r.i32()?, r.i32()?, r.i32()?, r.i32()?];
 
-        let mut tilesets = Vec::with_capacity(tileset_slots as usize);
+        // Each slot is at least its 4-byte name length.
+        let tileset_slots = r.count(tileset_slots, 4)?;
+        let mut tilesets = Vec::with_capacity(tileset_slots);
         for _ in 0..tileset_slots {
             let name = r.len_string()?;
             tilesets.push(if name.is_empty() {
@@ -202,7 +204,8 @@ impl Map {
             return Err(Error::Invalid("'TILE SET' marker not found after tileset list".into()));
         }
 
-        let mapping_count = r.u32()? as usize;
+        let mapping_count = r.u32()?;
+        let mapping_count = r.count(mapping_count, 8)?;
         let mut mappings = Vec::with_capacity(mapping_count);
         for _ in 0..mapping_count {
             mappings.push(TileMapping {
@@ -213,7 +216,8 @@ impl Map {
             });
         }
 
-        let terrain_type_count = r.u32()? as usize;
+        let terrain_type_count = r.u32()?;
+        let terrain_type_count = r.count(terrain_type_count, TERRAIN_TYPE_SIZE)?;
         let terrain_types =
             (0..terrain_type_count).map(|_| r.bytes(TERRAIN_TYPE_SIZE).map(<[u8]>::to_vec)).collect::<Result<_, _>>()?;
 
@@ -226,11 +230,15 @@ impl Map {
 
         let group_count = r.u32()?;
         let tile_group_unknown = r.u32()?;
-        let mut tile_groups = Vec::with_capacity(group_count as usize);
+        // Each group is at least its width, height and name length.
+        let group_count = r.count(group_count, 12)?;
+        let mut tile_groups = Vec::with_capacity(group_count);
         for _ in 0..group_count {
             let width = r.u32()?;
             let height = r.u32()?;
-            let mapping_indices = (0..width * height).map(|_| r.u32()).collect::<Result<_, _>>()?;
+            let cells = (width as usize).saturating_mul(height as usize);
+            r.count(cells.min(u32::MAX as usize) as u32, 4)?;
+            let mapping_indices = (0..cells).map(|_| r.u32()).collect::<Result<_, _>>()?;
             let len = r.u32()? as usize;
             let name_bytes = r.bytes(len)?.to_vec();
             let name = String::from_utf8_lossy(&name_bytes).into_owned();
@@ -347,5 +355,59 @@ impl Map {
     /// game's whole cell grid on cm01 and newworld (harness/oracle/FINDINGS.md).
     pub fn x_padding(&self) -> i32 {
         if self.wraps() { 0 } else { 32 }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A header up to the tileset count, with a 32 x 1 map's tile words and clip rect, then `rest`.
+    fn crafted(slots: u32, rest: &[u8]) -> Vec<u8> {
+        let mut d = Vec::new();
+        for v in [0x1011u32, 0, 5, 1, slots] {
+            d.extend_from_slice(&v.to_le_bytes());
+        }
+        d.extend_from_slice(&[0; 32 * 4 + 16]);
+        d.extend_from_slice(rest);
+        d
+    }
+
+    fn marker(words: &[u32]) -> Vec<u8> {
+        let mut v = b"TILE SET\x1a\0".to_vec();
+        for w in words {
+            v.extend_from_slice(&w.to_le_bytes());
+        }
+        v
+    }
+
+    #[test]
+    fn huge_counts_are_errors_not_allocations() {
+        assert!(matches!(Map::parse(&crafted(u32::MAX, &[])), Err(Error::Truncated { .. })));
+        assert!(matches!(Map::parse(&crafted(0, &marker(&[u32::MAX]))), Err(Error::Truncated { .. })));
+        assert!(matches!(Map::parse(&crafted(0, &marker(&[0, u32::MAX]))), Err(Error::Truncated { .. })));
+    }
+
+    #[test]
+    fn huge_tile_group_counts_are_errors() {
+        let v = 0x1011;
+        assert!(matches!(Map::parse(&crafted(0, &marker(&[0, 0, v, v, u32::MAX, 0]))), Err(Error::Truncated { .. })));
+        // One group whose width * height is huge.
+        assert!(Map::parse(&crafted(0, &marker(&[0, 0, v, v, 1, 0, u32::MAX, u32::MAX, 0]))).is_err());
+    }
+
+    #[test]
+    fn truncated_maps_are_errors() {
+        let d = crafted(1, &[]);
+        for cut in [0, 3, 19, 40, d.len() - 1] {
+            assert!(Map::parse(&d[..cut]).is_err(), "cut at {cut}");
+        }
+    }
+
+    #[test]
+    fn a_minimal_map_parses() {
+        let v = 0x1011;
+        let m = Map::parse(&crafted(0, &marker(&[0, 0, v, v, 0, 0]))).unwrap();
+        assert_eq!((m.width, m.height, m.tilesets.len(), m.mappings.len()), (32, 1, 0, 0));
     }
 }

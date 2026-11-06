@@ -20,6 +20,21 @@ impl<'a> Reader<'a> {
         self.pos
     }
 
+    /// Bytes not read yet.
+    pub fn remaining(&self) -> usize {
+        self.data.len() - self.pos
+    }
+
+    /// A count read from the file, checked against what the rest of the data could hold at `min_each` bytes per
+    /// item, so a crafted header can't make the caller reserve gigabytes.
+    pub fn count(&self, n: u32, min_each: usize) -> Result<usize, Error> {
+        let n = n as usize;
+        if n.checked_mul(min_each).is_none_or(|bytes| bytes > self.remaining()) {
+            return Err(Error::Truncated { offset: self.pos, wanted: n.saturating_mul(min_each) });
+        }
+        Ok(n)
+    }
+
     pub fn bytes(&mut self, len: usize) -> Result<&'a [u8], Error> {
         let end = self.pos.checked_add(len).filter(|&end| end <= self.data.len()).ok_or(Error::Truncated {
             offset: self.pos,
