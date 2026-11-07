@@ -19,14 +19,14 @@ dirs = "7"
 sha1_smol = "1"
 # Decoding the few functions of Outpost2.exe whose stores hold tables (`exe::code`).
 iced-x86.workspace = true
-lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "optimization"], optional = true }
+lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "optimization"], optional = true }
 flate2 = { version = "1", optional = true }
 crc32fast = { version = "1", optional = true }
 ureq = { version = "3", default-features = false, features = ["rustls"], optional = true }
 
 [dev-dependencies]
 # Builds the LZMA stream of a synthetic NSIS installer in the nsis tests.
-lzma-rust2 = { version = "0.23", default-features = false, features = ["std", "encoder"] }
+lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "encoder"] }
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry"] }
