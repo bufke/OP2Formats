@@ -611,7 +611,7 @@ mod tests {
 
     /// SHA-1 digests of the tables read from GOG's build (of their `Debug` text: no game data in the source), so a
     /// change to the readers can't shift a value unseen. The values equal the tables op2-rs embedded before
-    /// (units_table.rs, the cell speeds, ...; 2026-10-31).
+    /// (units_table.rs, the cell speeds, ...).
     #[test]
     fn gog_tables_digests() {
         let Some(files) = crate::testdata::game_files() else { return };
