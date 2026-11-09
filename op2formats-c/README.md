@@ -128,8 +128,9 @@ cbindgen --config cbindgen.toml --output include/op2formats.h
 ```
 
 `tests/c_api.rs`, `tests/all_areas.rs`, `tests/opm.rs`, `tests/mapjson.rs` and `tests/mission.rs` call the
-functions the way C does, every area against real game files where it can, comparing with another route to the same data (a map written back is the file it came from, a frame
-decoded straight away is the one decoded in order, a hand-built tank is the drawn one). They need `OP2_DIR` (an
+functions the way C does, every area against real game files where it can, comparing with another route to the
+same data (a map written back is the file it came from, a frame decoded straight away is the one decoded in order, a
+hand-built tank is the drawn one). They need `OP2_DIR` (an
 Outpost 2 install with OPU 1.4.1) and skip without it; `OP2_REQUIRE_DATA=1` makes the skip a failure. With
 `OP2_OPU_INSTALLER` naming OPU's official `OPUInstaller-1.4.1.exe` (from outpost2.net; never commit it), the OPU
 installer functions are tested too: the package checks, the NSIS reader lists and reads its files, and OPU installs
