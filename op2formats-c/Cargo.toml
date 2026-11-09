@@ -1,0 +1,28 @@
+[package]
+name = "op2formats-c"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "C interface to op2-formats, for C, C++ and other languages"
+publish = false
+
+[lib]
+# op2formats.dll / libop2formats.so / libop2formats.dylib, plus a static library.
+name = "op2formats"
+crate-type = ["cdylib", "staticlib", "rlib"]
+
+[features]
+# The installer readers. Without one, its functions stay in the library and return OP2F_STATUS_UNSUPPORTED, so the
+# header is the same for every build.
+default = ["inno", "opu"]
+# GOG's offline installer (Inno Setup).
+inno = ["op2-formats/inno"]
+# The OPU community update's installer (NSIS).
+opu = ["op2-formats/opu"]
+# Downloading OPU's installer from outpost2.net (adds an HTTPS client).
+fetch-opu = ["opu", "op2-formats/fetch-opu"]
+
+[dependencies]
+op2-formats = { path = ".." }
+op2-mapjson = { path = "../op2-mapjson" }
+op2-opm = { path = "../op2-opm" }

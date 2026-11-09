@@ -1,0 +1,3 @@
+# The same toolchain op2-rs pins (its tools/rust-toolchain.toml), so this copy builds with what upstream tests.
+[toolchain]
+channel = "1.99"

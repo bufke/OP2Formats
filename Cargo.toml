@@ -30,3 +30,16 @@ lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "e
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry"] }
+
+[workspace]
+resolver = "3"
+members = ["op2-mapjson", "op2-opm", "op2formats-c"]
+
+# Inherited by the crate above (`edition.workspace`, `license.workspace`), as in op2-rs's workspace.
+[workspace.package]
+edition = "2024"
+license = "GPL-3.0-or-later"
+
+# Inherited by the crate above (`iced-x86.workspace = true`), as op2-rs's tools workspace declares it.
+[workspace.dependencies]
+iced-x86 = { version = "1.21", default-features = false, features = ["std", "decoder", "intel", "instr_info"] }

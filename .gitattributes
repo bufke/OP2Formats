@@ -1,0 +1,2 @@
+# Test files are kept byte for byte (the editor writes CRLF).
+op2-opm/tests/data/** -text
