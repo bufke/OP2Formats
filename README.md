@@ -16,7 +16,8 @@ cutscenes, tables in `Outpost2.exe`, and the GOG and OPU installers.
 | `op2-opm/` | Reads and writes OP2MissionEditor's `.opm` mission files (see its [README](op2-opm/README.md)) |
 | `op2formats-c/` | A C interface for C, C++ and other languages: `op2formats.dll` / `.so` / `.dylib` and a static library, with the header `include/op2formats.h` (see its [README](op2formats-c/README.md)) |
 
-How the parts fit together: [ARCHITECTURE.md](ARCHITECTURE.md).
+How the parts fit together: [ARCHITECTURE.md](ARCHITECTURE.md). The file formats themselves are described in
+[docs/](docs/README.md).
 
 ## Where it comes from
 

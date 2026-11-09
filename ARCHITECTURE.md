@@ -35,6 +35,7 @@ OP2Formats/
 │   └── examples/cpp/       # C++ example (CMake), draws a tank and a structure to .tga
 ├── CMakeLists.txt          # Runs Cargo, defines OP2Formats::OP2Formats / ::shared / ::static
 ├── cmake/                  # find_package config for installed copies
+├── docs/                   # One document per Outpost 2 file format (index: docs/README.md)
 ├── Cargo.toml              # Workspace; declares what op2-formats inherits (edition, license, iced-x86)
 ├── rust-toolchain.toml     # Rust 1.99, as op2-rs
 ├── .github/workflows/ci.yml  # Build and test on Ubuntu, Windows and macOS
