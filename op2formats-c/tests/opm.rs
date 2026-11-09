@@ -1,4 +1,4 @@
-//! The `.opm` functions, called the way C does, on op2-opm's test missions.
+//! The `.opm` functions, called the way C does, on op2-formats' test missions.
 
 mod common;
 
@@ -15,7 +15,7 @@ fn out<T>(f: impl FnOnce(*mut T) -> Op2fStatus) -> T {
 }
 
 fn fixture(name: &str) -> String {
-    format!("{}/../op2-opm/tests/data/{name}", env!("CARGO_MANIFEST_DIR"))
+    format!("{}/../tests/data/opm/{name}", env!("CARGO_MANIFEST_DIR"))
 }
 
 #[test]

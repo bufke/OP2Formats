@@ -13,10 +13,14 @@ pub mod inno;
 pub mod install;
 pub mod lzh;
 pub mod map;
+#[cfg(feature = "mapjson")]
+pub mod mapjson;
 #[cfg(feature = "inno")]
 mod md5;
 #[cfg(feature = "opu")]
 pub mod nsis;
+#[cfg(feature = "opm")]
+pub mod opm;
 pub mod opu;
 mod reader;
 pub mod pe_res;

@@ -5,7 +5,7 @@
 
 use serde_json::{Map as JsonMap, Value};
 
-use crate::{MapJson, Range16, TerrainType};
+use super::{MapJson, Range16, TerrainType};
 
 const NL: &str = "\r\n";
 

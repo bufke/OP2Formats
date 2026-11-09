@@ -187,7 +187,7 @@ isn't carried.
 
 - op2-formats `map.rs` (`TileGroup`, the tile group section of a `.map`).
 - Leviathan's draft of the tile group JSON format (members, file naming, the per-row layout).
-- op2-mapjson `write.rs` (the PerRowPadded layout the files share).
+- op2-formats `mapjson/write.rs` (the PerRowPadded layout the files share).
 - OP2Mapper3's source: `fTileGroups.vb` (folders, reading, preview), `fTileSelect.vb` (export), `Commands.vb`
   (placing).
 - OP2TileSetTools' source: `fImportGraphic.vb` (a group from an imported graphic), `fTileGroup.vb` (importing a

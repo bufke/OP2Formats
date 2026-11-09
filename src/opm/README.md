@@ -1,11 +1,13 @@
-# op2-opm
+# op2-formats: `opm`
 
 Reads and writes `.opm` files, the JSON missions [OP2MissionEditor](https://github.com/leviathan400/OP2MissionEditor)
 saves next to each mission's `.map` and plugin DLL. The format is described in OP2OpmTools' `OPM_FORMAT.md`; the data
 model follows the OP2DotNetMissionSDK's `MissionReader/Json` classes.
 
+Behind the `opm` feature: `op2-formats = { version = "0.2", features = ["opm"] }`.
+
 ```rust
-let mut mission = op2_opm::Mission::open("cmyTut.opm")?;
+let mut mission = op2_formats::opm::Mission::open("cmyTut.opm")?;
 for player in &mission.master_variant.players {
     for unit in &player.resources.units {
         println!("{} at {:?}, {:?}", unit.type_id, unit.position, unit.cargo());
@@ -43,16 +45,16 @@ for `Southeast`).
 
 ## Tests
 
-`tests/data` holds two missions saved with OP2MissionEditor (`opu_12.opm`, `cmyTut.opm`). `tests/opm.rs` checks
+`tests/data/opm` holds two missions saved with OP2MissionEditor (`opu_12.opm`, `cmyTut.opm`). `tests/opm.rs` checks
 that they read and write back the same JSON. It also covers every reading rule above on hand-written text. With
 `OP2_OPM_DIR` set to a folder of `.opm` files, it reads and writes back every one. That passed with 11 files in four
 layouts: OP2MissionEditor's, OP2DotNetMissionSDK's test missions (including the older layout and a trailing comma),
 OP2 Remake's missions, and two files with each member on one line.
 
-`cargo run -p op2-opm --example opm_rewrite -- in.opm out.opm` reads a file and writes it in the editor's layout.
+`cargo run --features opm --example opm_rewrite -- in.opm out.opm` reads a file and writes it in the editor's layout.
 
 ## Not yet
 
 Merging a variant and a difficulty onto the master variant, converting `.opm` coordinates to map and in-game tiles,
 mapping unit names to op2-formats' unit art, and checking a mission against its map and tech tree. See
-[NOTES.md](../NOTES.md).
+[NOTES.md](../../NOTES.md).

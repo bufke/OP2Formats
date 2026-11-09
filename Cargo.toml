@@ -9,7 +9,7 @@ rust-version = "1.99"
 keywords = ["outpost2", "gamedev", "file-format", "parser"]
 categories = ["parser-implementations", "game-development"]
 # Only the crate: the C interface, the other crates, the format documents and CMake stay in the repository.
-include = ["/src/**", "/tests/**", "/LICENSE", "/README.md"]
+include = ["/src/**", "/tests/**", "/examples/**", "/LICENSE", "/README.md"]
 
 [features]
 # Extracting GOG's offline installer (Inno Setup); the shipped programs that offer it turn it on.
@@ -18,6 +18,10 @@ inno = ["dep:lzma-rust2", "dep:flate2", "dep:crc32fast"]
 opu = ["dep:lzma-rust2", "dep:flate2", "dep:crc32fast"]
 # Downloading OPU's installer from outpost2.net (`--fetch-opu`), with the HTTPS client op2-report already uses.
 fetch-opu = ["opu", "dep:ureq"]
+# OP2MissionEditor's .opm missions (`opm`).
+opm = ["dep:serde", "dep:serde_json"]
+# OP2MapJsonTools' JSON maps (`mapjson`).
+mapjson = ["dep:serde", "dep:serde_json"]
 
 [dependencies]
 thiserror = "2"
@@ -29,17 +33,31 @@ lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "o
 flate2 = { version = "1", optional = true }
 crc32fast = { version = "1", optional = true }
 ureq = { version = "3", default-features = false, features = ["rustls"], optional = true }
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
 
 [dev-dependencies]
 # Builds the LZMA stream of a synthetic NSIS installer in the nsis tests.
 lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "encoder"] }
+
+[[test]]
+name = "opm"
+required-features = ["opm"]
+
+[[test]]
+name = "mapjson"
+required-features = ["mapjson"]
+
+[[example]]
+name = "opm_rewrite"
+required-features = ["opm"]
 
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry"] }
 
 [workspace]
 resolver = "3"
-members = ["op2-mapjson", "op2-opm", "op2formats-c"]
+members = ["op2formats-c"]
 
 # Inherited by the crate above (`edition.workspace`, `license.workspace`), as in op2-rs's workspace.
 [workspace.package]

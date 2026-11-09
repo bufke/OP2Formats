@@ -18,8 +18,8 @@
 mod terrain;
 mod write;
 
-use op2_formats::Map;
-use op2_formats::map::{TileMapping as MapTileMapping, TilesetSource};
+use crate::Map;
+use crate::map::{TileMapping as MapTileMapping, TilesetSource};
 use serde::Deserialize;
 use serde_json::{Map as JsonMap, Value};
 
@@ -39,7 +39,7 @@ pub enum Error {
     #[error("{path}: {source}")]
     Io { path: String, source: std::io::Error },
     #[error("{0}")]
-    Map(#[from] op2_formats::Error),
+    Map(#[from] crate::Error),
 }
 
 /// A JSON map.

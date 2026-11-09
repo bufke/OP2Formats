@@ -9,8 +9,12 @@ State and plan for OP2Formats. Newest first; keep it short and current.
   with `git filter-repo`, the crate at the root) merged with this repo's own history, which
   had kept a copy in `op2-formats/` (that copy is left out; the old repo stays as
   OP2Formats-Old). This repo is now where op2-formats is maintained: edit it here.
-- The root `Cargo.toml` is the `op2-formats` crate and the workspace for `op2-mapjson`,
-  `op2-opm` and `op2formats-c`. The crate still takes `edition`, `license` and `iced-x86`
+- op2-formats 0.1.0 is on crates.io (2026-11-09): the crate as op2-rs had it at `69fb43ff`, tag
+  `v0.1.0`. 0.2 is under way: every Outpost 2 format in the one crate.
+- `.opm` missions and JSON maps are modules of op2-formats (`opm`, `mapjson`, behind features of
+  the same names), no longer crates of their own. Their history followed them (`git mv`).
+- The root `Cargo.toml` is the `op2-formats` crate and the workspace for `op2formats-c`. The
+  crate still takes `edition`, `license` and `iced-x86`
   from the workspace, as it did in op2-rs.
 - op2-formats reads the unit art, armor values and other tables from the
   player's `Outpost2.exe` at runtime (`exe::GameExe`) instead of embedding them. The C
@@ -36,12 +40,12 @@ State and plan for OP2Formats. Newest first; keep it short and current.
   `OP2Formats::OP2Formats` / `::shared` / `::static` and `op2formats_copy_runtime`; installs a
   `find_package` config (`cmake/`). Checked with MSVC 2022 and CMake 3.31 (Ninja and the
   Visual Studio generator, Debug and Release, shared and static, installed and found).
-- `op2-opm/` (2026-11-04): reads and writes `.opm` missions (see its README); in the C
+- `opm` (2026-11-04, then `op2-opm/`): reads and writes `.opm` missions (see `src/opm/README.md`); in the C
   interface as `op2f_opm_*` (299 functions in all now, 32 structs checked the same size in
   C, C++ and Rust). Fixtures: two editor-saved missions from the user's own projects.
   Next for it: effective mission (variant + difficulty merged), coordinates, unit art names,
   validation; setters in the C interface (C code edits through the canonical JSON for now).
-- `op2-mapjson/` (2026-11-06): `.map` to and from OP2MapJsonTools' JSON, PerRowPadded only (the user's choice: the
+- `mapjson` (2026-11-06, then `op2-mapjson/`): `.map` to and from OP2MapJsonTools' JSON, PerRowPadded only (the user's choice: the
   format all their tools are moving to). Every shipped map round-trips to the same `.map` bytes; the user's
   `map1.json` (not committed; `OP2_MAPJSON`) writes back byte for byte. JSON to `.map` needs no blank templates and
   uses the JSON's own mappings and terrain types (OP2MapJsonTools keeps the template's). C interface
@@ -58,25 +62,24 @@ State and plan for OP2Formats. Newest first; keep it short and current.
 3. **CI**: add the C side (cbindgen's output matches the committed header, the CMake example
    builds) and a MinGW job.
 4. **Tile group JSON** (IDEAS.md): not in OP2MapJsonTools' format yet; agree a layout first.
-5. **op2-opm, next phase**: effective mission (a variant and difficulty merged onto the
+5. **`opm`, next phase**: effective mission (a variant and difficulty merged onto the
    master), `.opm` to map and in-game coordinates, unit names to unit art, validation against
    the map and tech tree, setters in the C interface.
-6. **One crate**: fold `op2-opm` and `op2-mapjson` into op2-formats as modules (behind
-   features where they need extra dependencies); the C interface stays its own crate, not
-   published.
-7. **Publish** (op2-rs issue 33): real `edition`/`license`/`iced-x86` values or keep the
-   workspace ones (cargo publish fills them in), `repository` metadata, CI with clippy, then
-   crates.io as `op2-formats` (0.x, semver). op2-rs needs reader fixes released within days.
-   Agree with bufke whether the repo moves to a community organisation (OutpostUniverse).
+6. **0.2, every format**: readers (and writers where a tool needs one) for what op2-formats
+   doesn't read yet: saved games (`.op2`), mission DLLs, story texts, settings (`.ini`), tile
+   group JSON, OP2Mapper2's `.ctl`/`.map.dat`/`.tpl` files and OP2Lua missions. Then fix the
+   `opm` model's known mistakes (MissionType values, BotType, Region ID; see the findings).
+7. **Releases**: op2-rs needs reader fixes released within days. bufke to be added as a
+   crates.io owner. The repo stays on leviathan400 for now (OutpostUniverse maybe later).
 
 ## Checks before a commit
 
 - `cargo clippy --workspace --all-targets -- -D warnings`, also with `--no-default-features`
   and `--all-features`.
 - `cargo test --workspace` and `cargo test --workspace --all-features` without game data (as CI
-  runs them), and with `OP2_DIR` + `OP2_REQUIRE_DATA=1` (all crates pass; leave
+  runs them), and with `OP2_DIR` + `OP2_REQUIRE_DATA=1` (all pass; leave
   `OP2_REQUIRE_RUNS` unset). Sample files outside
-  the repo: `OP2_OPM_DIR`, `OP2_MAPJSON`, `OP2_OPU_INSTALLER` (see each crate's README).
+  the repo: `OP2_OPM_DIR`, `OP2_MAPJSON`, `OP2_OPU_INSTALLER` (see the module READMEs).
 - After changing the C interface: regenerate the header with cbindgen, check it compiles as C
   and C++ with warnings as errors, that every struct has the same size and alignment in C,
   C++ and Rust, and that the DLL exports every function the header declares.

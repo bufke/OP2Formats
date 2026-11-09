@@ -23,6 +23,5 @@ opu = ["op2-formats/opu"]
 fetch-opu = ["opu", "op2-formats/fetch-opu"]
 
 [dependencies]
-op2-formats = { path = ".." }
-op2-mapjson = { path = "../op2-mapjson" }
-op2-opm = { path = "../op2-opm" }
+# The .opm and JSON map modules are always in the C interface.
+op2-formats = { path = "..", features = ["opm", "mapjson"] }

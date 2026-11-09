@@ -1,11 +1,11 @@
-//! Reading and writing `.opm` files. `tests/data` holds two missions saved by OP2MissionEditor; `$OP2_OPM_DIR`, when
+//! Reading and writing `.opm` files. `tests/data/opm` holds two missions saved by OP2MissionEditor; `$OP2_OPM_DIR`, when
 //! set, names a folder whose `.opm` files (any writer's) are all read and written back too.
 
-use op2_opm::*;
+use op2_formats::opm::*;
 use serde_json::Value;
 
 fn data(name: &str) -> String {
-    std::fs::read_to_string(format!("{}/tests/data/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
+    std::fs::read_to_string(format!("{}/tests/data/opm/{name}", env!("CARGO_MANIFEST_DIR"))).unwrap()
 }
 
 /// Where two JSON values differ, as paths (empty when they're equal).

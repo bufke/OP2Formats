@@ -5,7 +5,7 @@ fn main() {
         eprintln!("usage: opm_rewrite <in.opm> <out.opm>");
         std::process::exit(2);
     };
-    let mission = op2_opm::Mission::open(input).unwrap_or_else(|e| {
+    let mission = op2_formats::opm::Mission::open(input).unwrap_or_else(|e| {
         eprintln!("{input}: {e}");
         std::process::exit(1);
     });

@@ -194,7 +194,7 @@ opm_enum! {
 opm_enum! {
     /// What a cargo truck carries (`Unit.CargoType` on a `CargoTruck`): the SDK's `TruckCargo` names. Note `Garbage`
     /// is wreckage and `Spaceport` a starship module (its id in `CargoAmount`); a gene bank has no name and comes as
-    /// the number 90 (see [`crate::Cargo`]).
+    /// the number 90 (see [`super::Cargo`]).
     TruckCargo {
         None = Some(0),
         Food = Some(1),

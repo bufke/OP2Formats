@@ -1,17 +1,17 @@
-//! JSON maps (OP2MapJsonTools' PerRowPadded format), through op2-mapjson. A JSON map converts to and from an
-//! `Op2fMap`, so everything the map functions do (drawing, tiles, tilesets) works on one.
+//! JSON maps (OP2MapJsonTools' PerRowPadded format), through op2-formats' `mapjson` module. A JSON map converts to
+//! and from an `Op2fMap`, so everything the map functions do (drawing, tiles, tilesets) works on one.
 
 use crate::*;
-use op2_mapjson::MapJson;
+use op2_formats::mapjson::MapJson;
 use std::ffi::c_char;
 
 /// A JSON map.
 pub struct Op2fMapJson(pub(crate) MapJson);
 
-fn mapjson_err(e: op2_mapjson::Error) -> Op2fStatus {
+fn mapjson_err(e: op2_formats::mapjson::Error) -> Op2fStatus {
     let status = match &e {
-        op2_mapjson::Error::Io { source, .. } if source.kind() == std::io::ErrorKind::NotFound => Op2fStatus::NotFound,
-        op2_mapjson::Error::Io { .. } => Op2fStatus::Io,
+        op2_formats::mapjson::Error::Io { source, .. } if source.kind() == std::io::ErrorKind::NotFound => Op2fStatus::NotFound,
+        op2_formats::mapjson::Error::Io { .. } => Op2fStatus::Io,
         _ => Op2fStatus::InvalidData,
     };
     fail(status, e.to_string())
@@ -112,7 +112,7 @@ pub unsafe extern "C" fn op2f_mapjson_info(json: *const Op2fMapJson, out: *mut O
     guard(|| {
         let j = self::json(json)?;
         let (w, h) = (j.header.width, j.header.height);
-        let c = j.clip_rect.unwrap_or_else(|| op2_mapjson::default_clip_rect(w, h));
+        let c = j.clip_rect.unwrap_or_else(|| op2_formats::mapjson::default_clip_rect(w, h));
         let info = Op2fMapJsonInfo {
             width: w,
             height: h,

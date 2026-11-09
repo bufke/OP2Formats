@@ -4,10 +4,10 @@ An `.opm` file is a mission written as JSON: the level settings, each player's s
 tubes, the beacons, markers and wreckage on the map, the music, and optional disasters, regions and triggers.
 OP2MissionEditor saves one next to the mission's `.map` and the mission DLL it builds; missions made with the
 OP2DotNetMissionSDK read it at run time through the SDK's mission reader. The game itself never reads an `.opm`.
-Read and written by op2-opm.
+Read and written by op2-formats (its `opm` module).
 
-Facts here come from op2-opm's model, the OP2DotNetMissionSDK's source (`MissionReader/Json`, which defines the
-member names), and these files: two missions saved with OP2MissionEditor (op2-opm's `tests/data`: `opu_12.opm`,
+Facts here come from op2-formats' `opm` model, the OP2DotNetMissionSDK's source (`MissionReader/Json`, which defines the
+member names), and these files: two missions saved with OP2MissionEditor (op2-formats' `tests/data/opm`: `opu_12.opm`,
 20514 bytes, and `cmyTut.opm`, 9801 bytes) and three SDK test missions (`cTest.opm`, `cTest-6p.opm`,
 `cTest-bak.opm`). Where only the SDK's source says something, the text says so.
 
@@ -28,7 +28,7 @@ is described byte for byte in [The editor's text layout](#the-editors-text-layou
 The SDK itself reads and writes the file with .NET's `DataContractJsonSerializer` (`MissionReader.GetMissionData`
 and `WriteMissionData`), which ignores layout on reading and writes members in name order with no white space. No
 SDK source on disk uses Newtonsoft.Json. **Unconfirmed:** the two-space column. It comes from OPM_FORMAT.md (its
-samples `cSDKFloodPlain.opm` and `cSDKPieChart.opm`) and op2-opm's README; no such file was available, and the
+samples `cSDKFloodPlain.opm` and `cSDKPieChart.opm`) and the `opm` module's README; no such file was available, and the
 three SDK test missions read here are tab-indented, in the [legacy layout](#legacy-layout). One of those two
 samples would settle it.
 
@@ -70,7 +70,7 @@ editor that saved `cmyTut.opm` didn't write `SDKVersion` or `Regions` at all.
 ### Legacy layout
 
 Older SDK files have no `MasterVariant`: its members `Players`, `TethysGame`, `TethysDifficulties` and
-`AutoLayouts` sit in the root. op2-opm moves them into a master variant when the root has no `MasterVariant`, and
+`AutoLayouts` sit in the root. op2-formats moves them into a master variant when the root has no `MasterVariant`, and
 keeps any other root member it doesn't know (the SDK test missions have a `Triggers2`). The three SDK test missions
 read this way.
 
@@ -107,7 +107,7 @@ wasn't available. A DLL it built, next to its `.opm`, would settle it.
 | `AutoLayouts` | array of [auto layouts](#autolayout) | bases placed around a centre point |
 
 How variants and difficulties combine, from the SDK's source (`MissionLogic.GetCombinedDifficultyVariant`, the
-`Concat` methods of `MissionVariant`, `GameData` and `PlayerData`; op2-opm doesn't merge them):
+`Concat` methods of `MissionVariant`, `GameData` and `PlayerData`; op2-formats doesn't merge them):
 
 1. When there are mission variants, one is picked with the game's random number generator and kept in the saved
    game, and added onto the master variant: its `TethysGame` onto the master's, its `TethysDifficulties` and each
@@ -182,7 +182,7 @@ A placed vehicle or structure.
 | `MaxTubes` | integer or `null` | for auto layouts |
 
 An absent `Health` is 1 and an absent `Lights` true: the SDK's reader sets them so before reading
-(`OnDeserializing`), and op2-opm does the same.
+(`OnDeserializing`), and op2-formats does the same.
 
 ### Cargo
 
@@ -203,7 +203,7 @@ An absent `Health` is 1 and an absent `Lights` true: the SDK's reader sets them 
 cargo as one 16-bit word, the amount times 16 plus the cargo's low 4 bits (for wreckage, 9, an amount above 8000
 loses 8000 first). 90 is 0x5A, so the truck carries cargo 10, which the game names "Gene Bank" (the cargo name
 routine 0x406310 knows 0-10; its case 10 is the string at 0x4E750C). So `"10"` gives the same truck, and any
-number whose low 4 bits are 10 does. op2-opm reads `90` and `10` as a gene bank; no file has `10`. The amount keeps
+number whose low 4 bits are 10 does. op2-formats reads `90` and `10` as a gene bank; no file has `10`. The amount keeps
 12 bits (0-4095).
 
 Starship module numbers (`map_id`): 88 EDWARD Satellite, 89 Solar Satellite, 90 Ion Drive, 91 Fusion Drive, 92
@@ -218,7 +218,7 @@ Package, 99 Phoenix Module, 100 Rare Metals Cargo, 101 Common Metals Cargo, 102 
 | `TypeID` | string | `Tube`, `Wall`, `LavaWall` or `MicrobeWall` |
 | `Position` | [point](#point) | its tile |
 
-The three SDK test missions write the tile as `Location` instead (2 to 86 times each). op2-opm reads either and
+The three SDK test missions write the tile as `Location` instead (2 to 86 times each). op2-formats reads either and
 writes `Position`.
 
 ## `TethysGame`
@@ -267,7 +267,7 @@ The game data of a variant, also each element of `TethysDifficulties`.
 | `IsVisible` | boolean | shown before it is found |
 | `Position` | [point](#point) | |
 
-The SDK's model declares `TechID` a string, but every file has a number there; op2-opm reads only a number.
+The SDK's model declares `TechID` a string, but every file has a number there; op2-formats reads only a number.
 
 ## Small types
 
@@ -303,7 +303,7 @@ The SDK's model declares `TechID` a string, but every file has a number there; o
 
 | Member | Type | Contents |
 |---|---|---|
-| `ID` | integer | in the SDK's model; op2-opm keeps it as an unknown member |
+| `ID` | integer | in the SDK's model; op2-formats keeps it as an unknown member |
 | `Name` | string | the name triggers use |
 | `Rect` | [rect](#datarect) | |
 
@@ -346,7 +346,7 @@ The `Triggers` of `TethysGame` and of `Resources`: an event, conditions and acti
 | `Actions` | array | `Type`, `Modifier` (`Set`, `Add`, `Subtract`), `Subject`, `Subject2`, `SubjectPlayer`, `SubjectRegion` (strings), `SubjectQuantity` (integer), `Value` to `Value5` (strings) |
 
 What the `Value`s mean depends on the condition's or action's `Type`. The SDK defines the lists of event,
-condition and action types (`MissionReader/Json/Triggers`); op2-opm keeps them as strings.
+condition and action types (`MissionReader/Json/Triggers`); op2-formats keeps them as strings.
 
 ## Enumerations
 
@@ -368,7 +368,7 @@ The numbers are the game's, where the value is passed to it.
 *N* is `NumPlayers`. Measured: the first word of the `DescBlock` export of the 106 mission DLLs in the game folder
 is −1 in the six colony games (`CEP1`, `CES1`, `CPP1`, `CPS1`, `CPS2`, `us_them`), −2 in the three demos, −3 in the 14 tutorials, −4 to −8 in the `mu`, `mf`, `mr`,
 `mm` and `ml` games, and the mission number (1 to 12) in the Eden and Plymouth campaign DLLs. A campaign mission
-writes its number in `MissionType`, e.g. `"10"`. The prefixes are the editor's (`file_prefix` in op2-opm).
+writes its number in `MissionType`, e.g. `"10"`. The prefixes are the editor's (`file_prefix` in op2-formats).
 
 ### `Color`
 
@@ -407,7 +407,7 @@ clockwise from east, in the SDK's spelling. `opu_12.opm` spells three of them `S
 `Circle` 0, `DNA` 1, `Beaker` 2 (the SDK's). They are the only types the game knows: `TethysGame::PlaceMarker`
 (0x478BB0) turns 0, 1 and 2 into the animations with game ids 1865, 2169 and 2170 (`op2_art.prt` records 1764,
 2068 and 2069; see [sprites.md](../docs/sprites.md#game-ids)) and has no value for any other type (it then uses
-whatever an unset local variable holds). op2-opm also knows `Common` and `Rare`, from the editor's marker art; no
+whatever an unset local variable holds). op2-formats also knows `Common` and `Rare`, from the editor's marker art; no
 file has them, the SDK reads them as `Circle`, and they shouldn't be written.
 
 ### `TruckCargo`
@@ -422,7 +422,7 @@ file has them, the SDK reads them as `Circle`, and they shouldn't be written.
 
 ## The editor's text layout
 
-OP2MissionEditor's files, as `opu_12.opm` and `cmyTut.opm` show them and op2-opm writes them:
+OP2MissionEditor's files, as `opu_12.opm` and `cmyTut.opm` show them and op2-formats writes them:
 
 - The file starts with a CRLF, then the root `{`. It ends with the root's `}` and no line break.
 - Lines end in CRLF and are indented with tabs, one per level.
@@ -432,7 +432,7 @@ OP2MissionEditor's files, as `opu_12.opm` and `cmyTut.opm` show them and op2-opm
   `{` on the next line, its members one level deeper, `}` back at the member's indent.
 - Inside an array, each object element is preceded by a blank line (indented one level deeper than the `[`), and
   number elements are one per line. An empty array is `[`, a blank indented line, `]`.
-- Every member of the model is written, `null`s included. op2-opm also writes members the file lacked (an older
+- Every member of the model is written, `null`s included. op2-formats also writes members the file lacked (an older
   editor's file gains `SDKVersion`, `Regions` and the `Triggers` lists); `AIImpl` and `TethysGame.WallTubes` only
   when they have a value.
 
@@ -450,17 +450,17 @@ So an empty mission's root starts:
 		...
 ```
 
-op2-opm writes the editor's files back as the same JSON. Byte for byte they differ in two ways: `opu_12.opm`'s
+op2-formats writes the editor's files back as the same JSON. Byte for byte they differ in two ways: `opu_12.opm`'s
 direction names are written `SouthEast`, `NorthWest`, `NorthEast`, and some of its blank lines have no tabs (those
 from line 942 on, all but one); the rule the editor's formatter follows there isn't known. A JSON reader ignores
 both. Unknown members are written back among the others in name order.
 
-## What op2-opm accepts
+## What op2-formats accepts
 
 - UTF-8, with or without a byte-order mark.
 - Either layout, members in any order; `//` and `/* */` comments and trailing commas, as Newtonsoft.Json accepts.
 - An absent member, or `null`, as its default: 0, false, empty, `None` for `CargoType`, health 1 and lights on for
-  units, enabled for triggers, and the first value listed in op2-opm for each enumeration.
+  units, enabled for triggers, and the first value listed in op2-formats for each enumeration.
 - Enumeration names in any case (`Southeast` reads as `SouthEast`); an unknown name, or a number where a name
   belongs, is kept as written and written back.
 - Members it doesn't know, kept in their object and written back.
@@ -476,8 +476,8 @@ mission DLL built with the SDK go beside the file.
 
 ## Sources
 
-- op2-opm `model.rs` (members and defaults), `enums.rs`, `lib.rs` (reading rules, cargo), `write.rs` (the editor's
-  layout), its README and `tests/opm.rs`.
+- op2-formats `opm/model.rs` (members and defaults), `enums.rs`, `mod.rs` (reading rules, cargo), `write.rs` (the
+  editor's layout), its README and `tests/opm.rs`.
 - OP2DotNetMissionSDK source (OutpostUniverse; Leviathan's copy): `MissionReader/MissionReader.cs` (the
   serializer), `MissionReader/Json` (member names, defaults, `Concat`, the `GetEnum` helpers), `MissionSDK/MissionLogic`
   (how variants and difficulties combine), `Outpost2DLL` enums (`MissionType`, `PlayerColor`, `TruckCargo`,
@@ -490,4 +490,4 @@ mission DLL built with the SDK go beside the file.
 - OP2OpmTools' `OPM_FORMAT.md` (Leviathan): the two writer styles, the bar yield and variant values, the colour
   table.
 - Measured: the `DescBlock` of the 106 mission DLLs of GOG Outpost 2; the two editor missions read and rewritten
-  with op2-opm and compared; the three SDK test missions read.
+  with op2-formats and compared; the three SDK test missions read.

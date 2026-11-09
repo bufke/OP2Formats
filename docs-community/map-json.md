@@ -3,9 +3,9 @@
 A JSON map is a `.map` file written out as text, for tools rather than the game: OP2MapJsonTools makes and reads
 them, OP2MapViewerJson draws them, and anyone can edit or diff them in a text editor. The game never reads one; a
 JSON map has to be converted back to a `.map` (see [maps.md](../docs/maps.md)) before it can be played. Read, written and
-converted by op2-mapjson, which writes the files OP2MapJsonTools wrote back byte for byte.
+converted by op2-formats, which writes the files OP2MapJsonTools wrote back byte for byte.
 
-Unless a section says otherwise, the numbers here were measured with op2-mapjson on the 89 maps of GOG Outpost 2
+Unless a section says otherwise, the numbers here were measured with op2-formats on the 89 maps of GOG Outpost 2
 with OPU 1.4.1, and on two files OP2MapJsonTools wrote: `map1.json` (a 128×128 custom map) and `eden03.json` (the
 campaign map).
 
@@ -14,7 +14,7 @@ campaign map).
 OP2MapJsonTools has three ways of writing the same members. They differ only in how `tiles` and `cellTypes` are
 laid out:
 
-| Layout | `tiles` and `cellTypes` | Written by op2-mapjson | Read by op2-mapjson |
+| Layout | `tiles` and `cellTypes` | Written by op2-formats `mapjson` | Read by op2-formats `mapjson` |
 |---|---|---|---|
 | Original | one flat array each, `width × height` values, row after row | no | no (refused with an error) |
 | PerRow | an array of `height` rows, each row on one line | no | yes |
@@ -26,7 +26,7 @@ there, not an array, means flat arrays.
 
 ## The file
 
-UTF-8 text. op2-mapjson writes no byte-order mark and accepts one. The root object has these members, in this
+UTF-8 text. op2-formats writes no byte-order mark and accepts one. The root object has these members, in this
 order:
 
 | Member | Type | Contents |
@@ -37,7 +37,7 @@ order:
 | `clipRect` | object | the clip rectangle; only present when it isn't the default |
 | `tileset` | object | the tileset slots, the tile mappings and the terrain types |
 
-Members are read by name, so their order doesn't matter to a reader. Members op2-mapjson doesn't know are kept and
+Members are read by name, so their order doesn't matter to a reader. Members op2-formats doesn't know are kept and
 written back (see [Unknown members](#unknown-members)).
 
 ### `header`
@@ -51,7 +51,7 @@ written back (see [Unknown members](#unknown-members)).
 | `author` | string | free text |
 | `notes` | string | free text |
 
-When op2-mapjson converts a map it puts the given file name in `map`, the name without its extension in `name`,
+When op2-formats converts a map it puts the given file name in `map`, the name without its extension in `name`,
 and leaves `author` and `notes` empty. Both OP2MapJsonTools files have the file name with its extension in `name`
 (`map1.map`, `eden03.map`), `Unknown` in `author` and `N/A` in `notes`: its front end, OP2JsonMap, passes the map's
 file name and those two fixed strings for every map it exports (`fMain.vb`, `ExportMapToJson`). Nothing reads these four strings back into the `.map`, which has no place for them.
@@ -205,7 +205,7 @@ each.
 
 ### Unknown members
 
-Members op2-mapjson doesn't know, in the root, `header` or `tileset`, are read as plain JSON, kept, and written
+Members op2-formats doesn't know, in the root, `header` or `tileset`, are read as plain JSON, kept, and written
 back at the end of their object, after the known members, in alphabetical order of their names. They are written
 in the same Newtonsoft layout, every array one element per line. A file that has unknown members in another order
 comes back with the same content but those members reordered.
@@ -222,8 +222,8 @@ A JSON map has the terrain and the tileset; four things in a `.map` have no memb
 
 ## Converting
 
-**`.map` to JSON** (op2-mapjson `MapJson::from_map`): the tiles and cell types are unpacked from the tile words in
-row order; `clipRect` is written only when it isn't the default; `sources` takes the slots up to the last used
+**`.map` to JSON** (op2-formats `mapjson::MapJson::from_map`): the tiles and cell types are unpacked from the tile
+words in row order; `clipRect` is written only when it isn't the default; `sources` takes the slots up to the last used
 one; mappings and terrain types are copied as they are.
 
 **JSON to `.map`** (`MapJson::to_map`). The JSON is checked first: `tiles` and `cellTypes` must have `height` rows
@@ -235,16 +235,16 @@ if more), its tile groups, and bits 16-31 of each of its tile words. Without a b
 
 Measured: every shipped map converts to JSON, reads back the same, writes the same text, and converts back to its
 original bytes with itself as the base; without a base, to the same map apart from the four things above. Both
-OP2MapJsonTools files write back byte for byte, and op2-mapjson's conversion of `eden03.map`, given the file's
+OP2MapJsonTools files write back byte for byte, and op2-formats' conversion of `eden03.map`, given the file's
 three header strings, is `eden03.json` byte for byte.
 
 ### Differences from OP2MapJsonTools
 
 - OP2MapJsonTools' export to `.map` starts from a blank template of one of ten sizes and keeps the template's
   mappings and terrain types, so a JSON map whose mappings differ from the template's comes out drawn wrongly.
-  op2-mapjson uses the JSON's own, and takes any size the checks above allow.
+  op2-formats uses the JSON's own, and takes any size the checks above allow.
 - OP2Utility, which OP2MapJsonTools uses, drops every empty tileset slot when trimming them; with a gap among the
-  used slots this shifts later slots down and points mappings at the wrong wells. op2-mapjson drops only the empty
+  used slots this shifts later slots down and points mappings at the wrong wells. op2-formats drops only the empty
   slots at the end. Maps without gaps, which includes every shipped map, give the same JSON either way.
 
 ## Making one
@@ -258,11 +258,11 @@ three header strings, is `eden03.json` byte for byte.
 
 ## Sources
 
-- op2-mapjson `lib.rs` (members, checks, conversion), `write.rs` (text layout), `terrain.rs` (terrain type
+- op2-formats `mapjson/mod.rs` (members, checks, conversion), `write.rs` (text layout), `terrain.rs` (terrain type
   records), its README and `tests/mapjson.rs`.
 - op2-formats `map.rs` (the `.map` side).
 - OP2MapJsonTools (Leviathan): the three layouts and the two sample files it wrote; its own format notes; its front
   end OP2JsonMap's `fMain.vb` (the strings it fills in).
 - OP2Utility (OutpostUniverse): `TerrainType.h` field names, `TrimTilesetSources`.
-- Measured: all 89 shipped maps of OPU 1.4.1 converted with op2-mapjson; `map1.json` and `eden03.json` read and
+- Measured: all 89 shipped maps of OPU 1.4.1 converted with op2-formats; `map1.json` and `eden03.json` read and
   written back.

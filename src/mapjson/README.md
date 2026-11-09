@@ -1,17 +1,19 @@
-# op2-mapjson
+# op2-formats: `mapjson`
 
 Converts Outpost 2 `.map` files to and from the JSON maps of
 [OP2MapJsonTools](https://github.com/leviathan400/OP2MapJsonToolsLibrary), which OP2MapViewerJson and other tools
 read. Only its PerRowPadded layout is written (one line per row of tiles and of cell types, numbers in columns);
 rows read padded or not. The older flat arrays ("Original" format) aren't read.
 
+Behind the `mapjson` feature: `op2-formats = { version = "0.2", features = ["mapjson"] }`.
+
 ```rust
-let map = files.read_map("cm01.map")?;                    // op2-formats
-let mut json = op2_mapjson::MapJson::from_map(&map, "cm01.map");
+let map = files.read_map("cm01.map")?;
+let mut json = op2_formats::mapjson::MapJson::from_map(&map, "cm01.map");
 json.header.author = "Dynamix".into();
 json.save("cm01.json")?;
 
-let json = op2_mapjson::MapJson::open("cm01.json")?;
+let json = op2_formats::mapjson::MapJson::open("cm01.json")?;
 std::fs::write("cm01.map", json.to_map(None)?.write())?;
 ```
 

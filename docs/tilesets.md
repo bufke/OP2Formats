@@ -184,7 +184,7 @@ places) refer to mapping indices too.
 
 ## Sources
 
-- op2-formats `tileset.rs`, `map.rs`; op2-mapjson `terrain.rs`.
+- op2-formats `tileset.rs`, `map.rs`; op2-formats `mapjson/terrain.rs`.
 - OP2Utility (OutpostUniverse): `.map` and `TerrainType` layouts.
 - Leviathan's OP2TileSetTools notes (tile allocation by well).
 - Disassembly of GOG's `Outpost2.exe` 1.2.0.7: the terrain-type routines (0x48B770-0x48BC50), their callers for

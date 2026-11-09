@@ -5,18 +5,17 @@ Multiplatform Outpost 2 file formats library.
 OP2Formats reads the data files of Outpost 2 (Dynamix/Sierra, 1997) in pure Rust, so the
 same code runs on Windows, Linux and macOS: `.vol` archives (including LZH-compressed
 entries), `.map` files, tilesets, `op2_art.prt` sprites, the stat sheets, sounds, the AVI
-cutscenes, tables in `Outpost2.exe`, and the GOG and OPU installers.
+cutscenes, tables in `Outpost2.exe`, the GOG and OPU installers, and the community tools' `.opm`
+missions and JSON maps.
 
 ## Layout
 
 | Folder | What |
 |---|---|
-| `src/`, `tests/` (the root crate, `op2-formats`) | The Rust library: the readers themselves |
-| `op2-mapjson/` | Converts `.map` files to and from OP2MapJsonTools' JSON maps, PerRowPadded (see its [README](op2-mapjson/README.md)) |
-| `op2-opm/` | Reads and writes OP2MissionEditor's `.opm` mission files (see its [README](op2-opm/README.md)) |
+| `src/`, `tests/` (the root crate, `op2-formats`) | The Rust library: every reader and writer. OP2MissionEditor's `.opm` missions ([`src/opm/`](src/opm/README.md)) and OP2MapJsonTools' JSON maps ([`src/mapjson/`](src/mapjson/README.md)) are modules behind the `opm` and `mapjson` features |
 | `op2formats-c/` | A C interface for C, C++ and other languages: `op2formats.dll` / `.so` / `.dylib` and a static library, with the header `include/op2formats.h` (see its [README](op2formats-c/README.md)) |
 
-The root `Cargo.toml` is both the `op2-formats` crate and the workspace for the other three.
+The root `Cargo.toml` is both the `op2-formats` crate and the workspace for the C interface.
 
 How the parts fit together: [ARCHITECTURE.md](ARCHITECTURE.md). The file formats themselves are described in
 [docs/](docs/README.md) (the original game's) and [docs-community/](docs-community/README.md) (the community's tools').
@@ -29,7 +28,7 @@ here, with its full git history, so that it can be maintained for every Outpost 
 published on its own (op2-rs issue 33). All credit for the format work goes to them. The
 history up to op2-rs commit `69fb43ff` is op2-rs's; op2-rs plans to depend on the published crate.
 
-The C interface, `op2-mapjson`, `op2-opm` and the format documents were developed in this
+The C interface, the `.opm` and JSON map modules and the format documents were developed in this
 repository's own history, which is merged in beside op2-rs's.
 
 ## License
@@ -46,7 +45,7 @@ cargo test
 
 `rust-toolchain.toml` pins Rust 1.99, the version op2-rs builds with; rustup installs it on
 first use. Optional features of `op2-formats`: `inno` (GOG's offline installer), `opu` (the
-OPU installer) and `fetch-opu` (downloading it).
+OPU installer), `fetch-opu` (downloading it), `opm` (`.opm` missions) and `mapjson` (JSON maps).
 
 C and C++ projects that use CMake can take the library with `add_subdirectory` or, once
 installed, `find_package(OP2Formats)`; the top-level `CMakeLists.txt` runs Cargo. See

@@ -117,7 +117,7 @@ Four signed 32-bit values: the part of the map that the view and units may reach
 - **Wrapping maps** (all five: `fl01`, `mp6_01`, `newworld`, `survatw`, `survaxen`): x1 = −1 and x2 = 2147483647, so
   no east or west edge, with y1 of 1 or 2 and y2 = 254.
 
-op2-mapjson leaves the clip rect out of a JSON map when it has the usual values above; for a wrapping map it treats
+op2-formats leaves the clip rect out of a JSON map when it has the usual values above; for a wrapping map it treats
 (0, 0, 511, height − 2) as usual, which no shipped map uses, so their JSON always carries the clip rect.
 
 ### Tileset slots
@@ -188,11 +188,11 @@ units and the rest of the game state after it. See [saved-games.md](saved-games.
 - Cell types 0-11 for the ground; the game derives the rest.
 - Mapping indices that exist in the map's own mapping table, usually the default one.
 - 512 tileset slots with the wells first, the default mappings and terrain types, and the version tag 0x1011 copied
-  from a shipped map are the safe choice (op2-mapjson does this when converting JSON to a `.map` without a base map).
+  from a shipped map are the safe choice (op2-formats does this when converting JSON to a `.map` without a base map).
 
 ## Sources
 
-- op2-formats `map.rs` (layout, tile order, cell types, coordinates); op2-mapjson `terrain.rs`.
+- op2-formats `map.rs` (layout, tile order, cell types, coordinates); op2-formats `mapjson/terrain.rs`.
 - OP2Utility (OutpostUniverse): `MapReader`, `MapWriter`, `TerrainType.h`.
 - An early disassembly-based description of the `.map` and `.op2` layouts (OP2 community notes): the tile word
   bits, the cell type list and the saved-game prefix.

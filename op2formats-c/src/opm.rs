@@ -1,4 +1,4 @@
-//! `.opm` mission files (OP2MissionEditor's JSON), through op2-opm.
+//! `.opm` mission files (OP2MissionEditor's JSON), through op2-formats' `opm` module.
 //!
 //! Objects are addressed by index: `variant` 0 is the master variant and 1.. the alternatives (`MissionVariants`);
 //! `difficulty` -1 is a player's base `Resources` or a variant's `TethysGame`, and 0.. the per-difficulty
@@ -7,7 +7,7 @@
 //! (triggers, regions, disasters, layouts) is in `op2f_opm_json`, the mission in a canonical form.
 
 use crate::*;
-use op2_opm::{self as opm, Mission};
+use op2_formats::opm::{self, Mission};
 use std::ffi::c_char;
 
 /// A `.opm` mission.

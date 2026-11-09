@@ -5,7 +5,7 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 
-use crate::enums::*;
+use super::enums::*;
 
 /// Members of an object this model doesn't know, by name, kept to be written back.
 pub type Extra = Map<String, Value>;

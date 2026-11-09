@@ -3,7 +3,7 @@
 //! converts to JSON and back. Both skip without their variable (`OP2_REQUIRE_DATA=1` makes the game's a failure).
 
 use op2_formats::{GameFiles, Map};
-use op2_mapjson::*;
+use op2_formats::mapjson::*;
 
 fn game() -> Option<GameFiles> {
     let Some(dir) = std::env::var_os("OP2_DIR").filter(|d| !d.is_empty()) else {
