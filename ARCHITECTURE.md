@@ -8,23 +8,23 @@ in [NOTES.md](NOTES.md); each crate's README has the details of its format.
 
 ```
 OP2Formats/
-├── op2-formats/            # The readers. An unmodified copy of op2-rs's tools/crates/op2-formats: never edit here
-│   ├── src/
-│   │   ├── game_files.rs   # GameFiles: finds any game file by name across loose files and .vol archives
-│   │   ├── install.rs      # Finding and checking an install (GOG, CD, Wine/Proton front ends; OPU version)
-│   │   ├── vol.rs, lzh.rs  # .vol archives and their LZH compression
-│   │   ├── map.rs          # .map: tiles, tileset slots, mappings, terrain types, tile groups; parse and write
-│   │   ├── tileset.rs      # Tileset images (PBMP and BMP strips of 32x32 tiles)
-│   │   ├── render.rs       # Drawing a map to RGBA; tile_palette.rs prepares GPU tile layers; virmask.rs the Blight
-│   │   ├── art.rs          # op2_art.prt + OP2_ART.BMP: palettes, images, animations, frames drawn in player colours
-│   │   ├── units.rs        # Which animation a unit draws (from the exe's tables); pick.rs: what a click hits
-│   │   ├── sheets.rs       # vehicles.txt and the other rule sheets, tech trees; strings.rs: UI strings
-│   │   ├── sound.rs        # op2.clm music and .wav; avi.rs + cinepak.rs + adpcm.rs: the cutscenes
-│   │   ├── pe_res.rs       # Windows resources in the game's DLLs (bitmaps, cursors, dialogs, strings)
-│   │   ├── exe/            # Outpost2.exe: PE sections, table checks, a small x86 decoder (code.rs) → GameExe
-│   │   ├── inno.rs         # GOG's offline installer (feature inno); nsis.rs + opu.rs: OPU's installer (opu)
-│   │   └── reader.rs, cache.rs, fnv.rs, utc.rs, md5.rs, sha256.rs, testdata.rs   # Shared helpers
-│   └── tests/              # Real-data tests (need $OP2_DIR) and synthetic installer tests
+├── Cargo.toml              # The op2-formats crate, and the workspace (edition, license, iced-x86 it inherits)
+├── src/                    # The readers
+│   ├── game_files.rs   # GameFiles: finds any game file by name across loose files and .vol archives
+│   ├── install.rs      # Finding and checking an install (GOG, CD, Wine/Proton front ends; OPU version)
+│   ├── vol.rs, lzh.rs  # .vol archives and their LZH compression
+│   ├── map.rs          # .map: tiles, tileset slots, mappings, terrain types, tile groups; parse and write
+│   ├── tileset.rs      # Tileset images (PBMP and BMP strips of 32x32 tiles)
+│   ├── render.rs       # Drawing a map to RGBA; tile_palette.rs prepares GPU tile layers; virmask.rs the Blight
+│   ├── art.rs          # op2_art.prt + OP2_ART.BMP: palettes, images, animations, frames drawn in player colours
+│   ├── units.rs        # Which animation a unit draws (from the exe's tables); pick.rs: what a click hits
+│   ├── sheets.rs       # vehicles.txt and the other rule sheets, tech trees; strings.rs: UI strings
+│   ├── sound.rs        # op2.clm music and .wav; avi.rs + cinepak.rs + adpcm.rs: the cutscenes
+│   ├── pe_res.rs       # Windows resources in the game's DLLs (bitmaps, cursors, dialogs, strings)
+│   ├── exe/            # Outpost2.exe: PE sections, table checks, a small x86 decoder (code.rs) → GameExe
+│   ├── inno.rs         # GOG's offline installer (feature inno); nsis.rs + opu.rs: OPU's installer (opu)
+│   └── reader.rs, cache.rs, fnv.rs, utc.rs, md5.rs, sha256.rs, testdata.rs   # Shared helpers
+├── tests/                  # Real-data tests (need $OP2_DIR) and synthetic installer tests
 ├── op2-mapjson/            # .map ⇄ OP2MapJsonTools' JSON maps (PerRowPadded); terrain.rs, write.rs (Newtonsoft layout)
 ├── op2-opm/                # OP2MissionEditor's .opm missions: model.rs (serde), enums.rs, write.rs (editor layout)
 ├── op2formats-c/           # The C ABI over all three crates
@@ -37,7 +37,6 @@ OP2Formats/
 ├── cmake/                  # find_package config for installed copies
 ├── docs/                   # One document per Outpost 2 file format (index: docs/README.md)
 ├── docs-community/         # One document per community tool's file format (index: docs-community/README.md)
-├── Cargo.toml              # Workspace; declares what op2-formats inherits (edition, license, iced-x86)
 ├── rust-toolchain.toml     # Rust 1.99, as op2-rs
 ├── .github/workflows/ci.yml  # Build and test on Ubuntu, Windows and macOS
 ├── README.md, NOTES.md, IDEAS.md, ARCHITECTURE.md
@@ -86,9 +85,9 @@ Rust programs use the three library crates directly; everything else goes throug
   from the game is embedded in the source.
 - **Features:** `inno` and `opu` (installer readers, default on in the C crate), `fetch-opu` (HTTPS download of
   OPU's installer, off).
-- **Upstream rule:** the folder is byte-identical to an op2-rs commit (named in README.md; `git rev-parse
-  HEAD:op2-formats` equals op2-rs's `<commit>:tools/crates/op2-formats`). Re-syncing means copying the folder again
-  and fixing the crates that use it. Fixes to the readers go to op2-rs.
+- **Where it is maintained:** here. The crate moved out of op2-rs with its history (up to op2-rs `69fb43ff`), and
+  op2-rs will use the published crate. Reader fixes are made in this repository, and the crates that use op2-formats
+  follow its API changes in the same commit.
 
 ### 3.2. op2-mapjson
 
@@ -188,14 +187,14 @@ The library stores nothing of its own. What it reads:
 - C and CMake checks in CI; a MinGW build (op2remake's Qt toolchain).
 - Tile group JSON (IDEAS.md); op2-opm's next phase (variant and difficulty merged, coordinates, validation, C
   setters).
-- Taking in later op2-rs changes: the C crate must follow API changes in op2-formats (as when unit art moved from
-  built-in tables to `GameExe`).
+- Folding op2-mapjson and op2-opm into op2-formats as modules, and publishing it on crates.io for op2-rs. The C
+  crate follows API changes in op2-formats (as when unit art moved from built-in tables to `GameExe`).
 
 ## 10. Project Identification
 
 - **Project name:** OP2Formats
 - **Repository:** https://github.com/leviathan400/OP2Formats
-- **Upstream:** op2-rs by bufke, https://gitlab.com/bufke/op2-rs (`tools/crates/op2-formats`)
+- **Origin:** op2-formats comes from op2-rs by bufke, https://gitlab.com/bufke/op2-rs (`tools/crates/op2-formats`)
 - **Maintainer:** Leviathan (leviathan400)
 - **Date of last update:** 2026-11-09
 

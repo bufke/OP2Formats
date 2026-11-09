@@ -4,11 +4,15 @@ State and plan for OP2Formats. Newest first; keep it short and current.
 
 ## Where it stands (2026-11-09)
 
-- `op2-formats/` is an unmodified copy of op2-rs's `tools/crates/op2-formats` at commit
-  `f7e9a15` (re-synced 2026-11-09 from `9798188`). It stays byte-identical to upstream;
-  anything this repo needs lives outside that folder (root `Cargo.toml` workspace, including
-  the `iced-x86` workspace dependency, `rust-toolchain.toml`, README, CI).
-- Since that re-sync op2-formats reads the unit art, armor values and other tables from the
+- op2-formats has moved out of op2-rs into this repository (op2-rs issue 33). The repo was
+  rebuilt: op2-rs's history of `tools/crates/op2-formats` (to op2-rs `69fb43ff`, extracted
+  with `git filter-repo`, the crate at the root) merged with this repo's own history, which
+  had kept a copy in `op2-formats/` (that copy is left out; the old repo stays as
+  OP2Formats-Old). This repo is now where op2-formats is maintained: edit it here.
+- The root `Cargo.toml` is the `op2-formats` crate and the workspace for `op2-mapjson`,
+  `op2-opm` and `op2formats-c`. The crate still takes `edition`, `license` and `iced-x86`
+  from the workspace, as it did in op2-rs.
+- op2-formats reads the unit art, armor values and other tables from the
   player's `Outpost2.exe` at runtime (`exe::GameExe`) instead of embedding them. The C
   interface follows: the unit-art calls take an `Op2fGameExe` (`op2f_game_exe_open`), armor
   values come from `op2f_game_exe_armor_value` (the stats structs lost their `armor` field),
@@ -57,11 +61,13 @@ State and plan for OP2Formats. Newest first; keep it short and current.
 5. **op2-opm, next phase**: effective mission (a variant and difficulty merged onto the
    master), `.opm` to map and in-game coordinates, unit names to unit art, validation against
    the map and tech tree, setters in the C interface.
-6. **Upstream**: tell bufke about this repo; send reader fixes to op2-rs as merge requests;
-   to take in upstream changes, copy the folder again from a newer op2-rs commit and update
-   the commit named in the README.
-7. **Name**: the crate is still `op2-formats`. Decide before publishing anywhere (crates.io
-   needs a unique name; `outpost2-formats` was one idea).
+6. **One crate**: fold `op2-opm` and `op2-mapjson` into op2-formats as modules (behind
+   features where they need extra dependencies); the C interface stays its own crate, not
+   published.
+7. **Publish** (op2-rs issue 33): real `edition`/`license`/`iced-x86` values or keep the
+   workspace ones (cargo publish fills them in), `repository` metadata, CI with clippy, then
+   crates.io as `op2-formats` (0.x, semver). op2-rs needs reader fixes released within days.
+   Agree with bufke whether the repo moves to a community organisation (OutpostUniverse).
 
 ## Checks before a commit
 
@@ -77,6 +83,6 @@ State and plan for OP2Formats. Newest first; keep it short and current.
 
 ## License note
 
-GPL-3.0-or-later, as upstream. Any program that links OP2Formats (including through the C
+GPL-3.0-or-later, as op2-rs. Any program that links OP2Formats (including through the C
 interface) must be distributed under the GPL. A permissive license would need the agreement
 of op2-formats' contributors: bufke (nearly all of it), Leviathan and johnathonfox.

@@ -274,7 +274,7 @@ impl MapJson {
 }
 
 /// The bytes of an empty `.map` of the given size (no tilesets, mappings, terrain types or tile groups), for
-/// `Map::parse` to make a `Map` from: op2-formats' `Map` has no constructor, and its folder stays as upstream has it.
+/// `Map::parse` to make a `Map` from: op2-formats' `Map` has no constructor.
 fn skeleton(version: u32, width: u32, height: u32) -> Vec<u8> {
     let mut out = Vec::with_capacity((width * height) as usize * 4 + 64);
     for v in [version, 0, width.trailing_zeros(), height, 0] {

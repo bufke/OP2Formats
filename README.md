@@ -11,25 +11,26 @@ cutscenes, tables in `Outpost2.exe`, and the GOG and OPU installers.
 
 | Folder | What |
 |---|---|
-| `op2-formats/` | The Rust library: the readers themselves |
+| `src/`, `tests/` (the root crate, `op2-formats`) | The Rust library: the readers themselves |
 | `op2-mapjson/` | Converts `.map` files to and from OP2MapJsonTools' JSON maps, PerRowPadded (see its [README](op2-mapjson/README.md)) |
 | `op2-opm/` | Reads and writes OP2MissionEditor's `.opm` mission files (see its [README](op2-opm/README.md)) |
 | `op2formats-c/` | A C interface for C, C++ and other languages: `op2formats.dll` / `.so` / `.dylib` and a static library, with the header `include/op2formats.h` (see its [README](op2formats-c/README.md)) |
+
+The root `Cargo.toml` is both the `op2-formats` crate and the workspace for the other three.
 
 How the parts fit together: [ARCHITECTURE.md](ARCHITECTURE.md). The file formats themselves are described in
 [docs/](docs/README.md) (the original game's) and [docs-community/](docs-community/README.md) (the community's tools').
 
 ## Where it comes from
 
-This is the `op2-formats` crate of [op2-rs](https://gitlab.com/bufke/op2-rs), bufke's
-reimplementation of Outpost 2, written by bufke and op2-rs's contributors. It was
-imported unmodified so that other Outpost 2 projects can use it on its own; the copy here is
-op2-rs commit `f7e9a15` (see the git history). All credit for the format work goes to them.
+The `op2-formats` crate was written by bufke and op2-rs's contributors as part of
+[op2-rs](https://gitlab.com/bufke/op2-rs), bufke's reimplementation of Outpost 2. It moved
+here, with its full git history, so that it can be maintained for every Outpost 2 project and
+published on its own (op2-rs issue 33). All credit for the format work goes to them. The
+history up to op2-rs commit `69fb43ff` is op2-rs's; op2-rs plans to depend on the published crate.
 
-The code in `op2-formats/` is kept identical to upstream so updates can be brought over
-cleanly; changes needed to build it here live outside that folder (the root `Cargo.toml`
-declares the workspace values it inherits, such as the `iced-x86` dependency). Fixes to the
-readers themselves should go to op2-rs too.
+The C interface, `op2-mapjson`, `op2-opm` and the format documents were developed in this
+repository's own history, which is merged in beside op2-rs's.
 
 ## License
 
