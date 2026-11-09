@@ -1,0 +1,32 @@
+[package]
+name = "op2-formats"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+description = "Readers for Outpost 2 data files: .vol archives, .map files, and tilesets"
+
+[features]
+# Extracting GOG's offline installer (Inno Setup); the shipped programs that offer it turn it on.
+inno = ["dep:lzma-rust2", "dep:flate2", "dep:crc32fast"]
+# Installing the OPU community update from its official installer (an NSIS installer).
+opu = ["dep:lzma-rust2", "dep:flate2", "dep:crc32fast"]
+# Downloading OPU's installer from outpost2.net (`--fetch-opu`), with the HTTPS client op2-report already uses.
+fetch-opu = ["opu", "dep:ureq"]
+
+[dependencies]
+thiserror = "2"
+dirs = "7"
+sha1_smol = "1"
+# Decoding the few functions of Outpost2.exe whose stores hold tables (`exe::code`).
+iced-x86.workspace = true
+lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "optimization"], optional = true }
+flate2 = { version = "1", optional = true }
+crc32fast = { version = "1", optional = true }
+ureq = { version = "3", default-features = false, features = ["rustls"], optional = true }
+
+[dev-dependencies]
+# Builds the LZMA stream of a synthetic NSIS installer in the nsis tests.
+lzma-rust2 = { version = "0.25", default-features = false, features = ["std", "encoder"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_System_Registry"] }
