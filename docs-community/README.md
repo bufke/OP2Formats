@@ -8,7 +8,7 @@ and these documents link there for the parts they share (tiles, cell types, coor
 | Format | Files | Made by | Document | Read by |
 |---|---|---|---|---|
 | JSON maps | `.json` | OP2MapJsonTools | [map-json.md](map-json.md) | op2-mapjson |
-| Tile group JSON | one tile group per `.json` | proposed, for map tools | [tile-group-json.md](tile-group-json.md) | not read yet |
+| Tile group JSON | one tile group per `.json` | OP2Mapper3, OP2TileSetTools | [tile-group-json.md](tile-group-json.md) | not read yet |
 | Missions | `.opm` | OP2MissionEditor, OP2DotNetMissionSDK | [opm.md](opm.md) | op2-opm |
 | OP2Mapper2 unit table | `units.ctl` | OP2Mapper2 | [op2mapper2-units-ctl.md](op2mapper2-units-ctl.md) | not read |
 | OP2Mapper2 weapon table | `weapons.ctl` | OP2Mapper2 | [op2mapper2-weapons-ctl.md](op2mapper2-weapons-ctl.md) | not read |
