@@ -17,7 +17,7 @@ cutscenes, tables in `Outpost2.exe`, and the GOG and OPU installers.
 | `op2formats-c/` | A C interface for C, C++ and other languages: `op2formats.dll` / `.so` / `.dylib` and a static library, with the header `include/op2formats.h` (see its [README](op2formats-c/README.md)) |
 
 How the parts fit together: [ARCHITECTURE.md](ARCHITECTURE.md). The file formats themselves are described in
-[docs/](docs/README.md).
+[docs/](docs/README.md) (the original game's) and [docs-community/](docs-community/README.md) (the community's tools').
 
 ## Where it comes from
 

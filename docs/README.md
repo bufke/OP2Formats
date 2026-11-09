@@ -3,7 +3,8 @@
 The file formats of the original game, one document each: what the file is for, its layout byte by byte or field by
 field, how the game uses it, and which part of OP2Formats reads it. Where OPU 1.4.1 (the community update) moves or
 extends a file, the document says so. Facts are checked against the game's own files and its `Outpost2.exe`;
-anything not yet settled is marked **unconfirmed**.
+anything not yet settled is marked **unconfirmed**. The formats of the community's tools (JSON maps, `.opm`
+missions, OP2Mapper2's files, OP2Lua missions) are in [../docs-community/](../docs-community/README.md).
 
 | Format | Files | Document | Read by |
 |---|---|---|---|

@@ -16,7 +16,7 @@ comes from the raw disassembly of GOG's `Outpost2.exe` 1.2.0.7 and of `OP2Shell.
 |---|---|---|
 | game folder | 106 | the Sierra missions: campaigns, tutorials, colony games, demos, multiplayer |
 | `OPU\base\maps\<mission>\` | 106 | byte-identical copies of the game folder's 106, one folder per map (`campaign`, `tutorial`, `misc`, `PieChart`, ...) |
-| `OPU\maps\<pack>\` | 53 | community missions shipped with OPU, plus the OP2Lua missions |
+| `OPU\maps\<pack>\` | 53 | community missions shipped with OPU, plus the OP2Lua missions (see [lua-missions.md](../docs-community/lua-missions.md)) |
 
 That is 159 distinct files (the 106 copies are identical by hash; no two of the 53 are). A DLL is a mission when it
 exports `DescBlock`; 16 other DLLs in the install don't (the shell, `out2res.dll`, network and loader DLLs, OPU's
@@ -40,7 +40,7 @@ The file name prefixes are the convention the original game's menus rely on.
 | Midas | −7 | `mm`*N* | |
 | Last One Standing | −8 | `ml`*N* | |
 
-*N* is the player count, one digit.
+*N* is the player count, one digit. The values are the ones [opm.md](../docs-community/opm.md#missiontype) lists for the editor.
 
 The game itself tests the type in a few places: multiplayer is a type from −8 to −4 (0x4028E0, also 0x403385),
 a campaign is a type above 0 (0x402930), a colony game exactly −1 (0x402960).
@@ -288,7 +288,7 @@ holding one or more mission DLLs and whatever they need that the game doesn't ha
 | `op2extra.dll` | 3 | a helper library (the same file in three packs) that their missions import |
 | `*.map` | 27 | the pack's maps; other missions name a stock map |
 | `*.txt` | 26 | tech trees (`survtech.txt`, `cooptech.txt`, ...), Exiles' five briefings, OP2Lua's readme |
-| `*.lua` | 22 | OP2Lua missions |
+| `*.lua` | 22 | OP2Lua missions ([lua-missions.md](../docs-community/lua-missions.md)) |
 
 OPU's change notes also say DLLs may be placed anywhere in this folder tree or in `OPU\libs`, which is how a mission
 finds a library such as `op2extra.dll` or `OP2LuaCore.dll`.
