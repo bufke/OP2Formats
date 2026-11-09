@@ -3,7 +3,13 @@ name = "op2-formats"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
-description = "Readers for Outpost 2 data files: .vol archives, .map files, and tilesets"
+description = "Outpost 2 file formats library - Read and Write Outpost 2's data files: .vol archives, maps, tilesets, sheets etc"
+repository = "https://github.com/leviathan400/OP2Formats"
+rust-version = "1.99"
+keywords = ["outpost2", "gamedev", "file-format", "parser"]
+categories = ["parser-implementations", "game-development"]
+# Only the crate: the C interface, the other crates, the format documents and CMake stay in the repository.
+include = ["/src/**", "/tests/**", "/LICENSE", "/README.md"]
 
 [features]
 # Extracting GOG's offline installer (Inno Setup); the shipped programs that offer it turn it on.
