@@ -794,8 +794,8 @@ pub fn resolve(cli: Option<PathBuf>, saved: Option<PathBuf>) -> Resolved {
 pub enum OpuPlan {
     /// OPU is there (in the game folder, or installed by op2-rs): use it without asking.
     Ready,
-    /// Download and install it: asked for (`--fetch-opu`, `fetch_opu` in settings.toml) or
-    /// [`FETCH_BY_DEFAULT`](crate::opu::FETCH_BY_DEFAULT).
+    /// Download and install it: asked for (`--fetch-opu`, `fetch_opu = true` in settings.toml) or, for a player's
+    /// folder, [`FETCH_BY_DEFAULT`](crate::opu::FETCH_BY_DEFAULT) unless `fetch_opu = false`.
     Fetch,
     /// Ask the player to get it: the first-run screen, `op2 setup`.
     Ask,
@@ -804,15 +804,16 @@ pub enum OpuPlan {
     Warn,
 }
 
-/// The [`OpuPlan`] for `check`, a folder from `origin`; `fetch` is the player's request to download OPU.
-pub fn opu_plan(check: &Check, origin: &Origin, fetch: bool) -> OpuPlan {
+/// The [`OpuPlan`] for `check`, a folder from `origin`; `fetch` is the player's choice about downloading OPU
+/// (`--fetch-opu`, `fetch_opu` in settings.toml), if they made one.
+pub fn opu_plan(check: &Check, origin: &Origin, fetch: Option<bool>) -> OpuPlan {
     if check.opu.is_some() {
         OpuPlan::Ready
-    } else if fetch {
+    } else if fetch == Some(true) {
         OpuPlan::Fetch
     } else if matches!(origin, Origin::CommandLine | Origin::EnvVar | Origin::SourceTree) {
         OpuPlan::Warn
-    } else if crate::opu::FETCH_BY_DEFAULT {
+    } else if fetch.unwrap_or(crate::opu::FETCH_BY_DEFAULT) {
         OpuPlan::Fetch
     } else {
         OpuPlan::Ask
@@ -1174,18 +1175,20 @@ mod tests {
             return;
         }
         let found = Origin::Found("GOG default folder".into());
-        assert_eq!(opu_plan(&plain, &found, false), if crate::opu::FETCH_BY_DEFAULT { OpuPlan::Fetch } else { OpuPlan::Ask });
-        assert_eq!(opu_plan(&plain, &Origin::Settings, false), opu_plan(&plain, &found, false));
+        assert_eq!(opu_plan(&plain, &found, None), if crate::opu::FETCH_BY_DEFAULT { OpuPlan::Fetch } else { OpuPlan::Ask });
+        assert_eq!(opu_plan(&plain, &Origin::Settings, None), opu_plan(&plain, &found, None));
+        assert_eq!(opu_plan(&plain, &found, Some(false)), OpuPlan::Ask, "opted out");
         for dev in [Origin::CommandLine, Origin::EnvVar, Origin::SourceTree] {
-            assert_eq!(opu_plan(&plain, &dev, false), OpuPlan::Warn, "{dev}");
-            assert_eq!(opu_plan(&plain, &dev, true), OpuPlan::Fetch, "asked for");
+            assert_eq!(opu_plan(&plain, &dev, None), OpuPlan::Warn, "{dev}");
+            assert_eq!(opu_plan(&plain, &dev, Some(false)), OpuPlan::Warn, "{dev}");
+            assert_eq!(opu_plan(&plain, &dev, Some(true)), OpuPlan::Fetch, "asked for");
         }
-        assert_eq!(opu_plan(&plain, &found, true), OpuPlan::Fetch);
+        assert_eq!(opu_plan(&plain, &found, Some(true)), OpuPlan::Fetch);
         fs::create_dir_all(t.0.join("OPU")).unwrap();
         fs::write(t.0.join("OPU/OPUPatch.dll"), b"").unwrap();
         let with = check(&t.0);
         for origin in [found, Origin::CommandLine] {
-            assert_eq!(opu_plan(&with, &origin, true), OpuPlan::Ready, "OPU there: no questions, no download");
+            assert_eq!(opu_plan(&with, &origin, Some(true)), OpuPlan::Ready, "OPU there: no questions, no download");
         }
         assert!(opu_needed_message(&plain).contains(crate::opu::DOWNLOAD_PAGE));
     }

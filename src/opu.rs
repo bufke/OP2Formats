@@ -40,9 +40,10 @@ pub const PACKAGE_SHA256: &str = "14f534719e97bf747c6facb090f147fa4c44278605b97a
 /// Who made OPU and under what terms, for every place op2-rs mentions or installs it.
 pub const CREDIT: &str = "OPU Unofficial Update by the Outpost Universe community (outpost2.net), \
                           licensed CC BY-NC-ND 4.0";
-/// Download OPU without asking when it's missing. Off until the OPU maintainers agree; turning it on makes the
-/// engine and `op2 setup` fetch it as if `--fetch-opu` were given.
-pub const FETCH_BY_DEFAULT: bool = false;
+/// Download OPU's pinned installer ([`PACKAGE_URL`], checked against [`PACKAGE_SHA256`]) without asking when a
+/// player's game has no OPU: the first-run screen and `op2 setup` after choosing a game. `fetch_opu = false` in
+/// settings.toml opts out. op2-rs never redistributes OPU; it installs the player's own download, unchanged.
+pub const FETCH_BY_DEFAULT: bool = true;
 
 /// Where a step of the install is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
