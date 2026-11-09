@@ -13,17 +13,17 @@ It covers all of op2-formats, one source file per area:
 | Maps | open, parse or write; size, wrapping and x padding, clip rect, tiles (read and edit), tileset slots, tile mappings, tile groups, terrain types, cell speeds | `map.rs`, `render.rs` |
 | Drawing maps | a map's tilesets loaded; the whole map at 1-32 px per tile, tile groups, one tile, a mapping's minimap colour; the GPU tile palette (texture-array layers and an overview image); tileset strips; PBMP to BMP | `render.rs` |
 | Sheets | any sheet (`vehicles.txt`, ...) or keyed sheet (`morale.txt`) by row and column | `rules.rs`, `stats.rs` |
-| Rules | the sheets decoded as the game loads them: vehicle, weapon, structure, space and mine stats; armor values; where each sheet came from | `stats.rs` |
+| Rules | the sheets decoded as the game loads them: vehicle, weapon, structure, space and mine stats; where each sheet came from | `stats.rs` |
 | Tech trees | topics with costs, requirements, texts and the stat changes they make | `stats.rs` |
 | UI strings | OPU's `language.ini`, by string id; the ids of unit, structure and weapon names and armor words | `stats.rs` |
 | Sprites | images and animation frames drawn as RGBA in any player colour, with hotspots; palettes, raw pixels, frame layers, bounds, clip rectangles; the game's click test on a frame | `sprites.rs`, `art.rs` |
-| Unit art | which animation the game draws for a vehicle (state, facing), a structure (slot) or a turret; turret and muzzle offsets; vehicles and tanks drawn whole | `sprites.rs`, `unit_art.rs` |
+| Unit art | which animation the game draws for a vehicle (state, facing), a structure (slot) or a turret, from `Outpost2.exe`'s tables (`op2f_game_exe_open`); turret offsets and a Tiger's second barrel; vehicles and tanks drawn whole | `sprites.rs`, `unit_art.rs` |
 | Picking | what a click selects or targets among units, as the game decides | `unit_art.rs` |
 | Images | made from pixels, shrunk, mip chains, one drawn over another | `common.rs` |
 | `.vol` archives | entries, their storage, reading them stored or decoded; LZH | `media.rs` |
 | Sound | `op2.clm` tracks as PCM or `.wav`; `.wav` formats | `sound.rs` |
 | Cutscenes | AVI frames decoded (Cinepak) in any order, the audio decoded (MS ADPCM), raw streams | `video.rs` |
-| `Outpost2.exe` | the tables read from it: sound files, Savant lengths, the ambient animation sequence, tube graphics; any value or string | `exe.rs` |
+| `Outpost2.exe` | the tables read from it: sound files, Savant lengths, the ambient animation sequence, tube graphics; any value or string; its SHA-1 and whether it is GOG's build. `op2f_game_exe_open` reads every table once per game folder and checks it: the unit art, armor values, a warning for another build | `exe.rs` |
 | Windows resources | the game's DLLs: bitmaps (with palettes), cursors and icons, string tables, dialogs, menus, version strings; `.bmp`, `.cur`, `.ico` and `.ani` files | `resources.rs` |
 | Installers | GOG's offline installer (feature `inno`), OPU's installer and its install (`opu`), downloading OPU (`fetch-opu`) | `installers.rs` |
 | JSON maps | `.map` to and from OP2MapJsonTools' JSON (PerRowPadded): parse, write, header texts, to an `Op2fMap` (with or without a base map) and from one | `mapjson.rs` |

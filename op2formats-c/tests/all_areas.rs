@@ -55,6 +55,21 @@ fn exe_tables() {
     let mut ambient = [0u8; OP2F_AMBIENT_ROWS * 5];
     ok(unsafe { op2f_exe_ambient_sequence(exe, ambient.as_mut_ptr()) });
     assert_eq!((ambient[0], ambient[(OP2F_AMBIENT_ROWS - 1) * 5]), (0xFF, 0xFF));
+    let sha1 = string(|b, c, l| unsafe { op2f_exe_sha1(exe, b, c, l) });
+    assert!(sha1.len() == 40 && sha1.bytes().all(|b| b.is_ascii_hexdigit()), "{sha1}");
+
+    // The checked tables: from the game folder (shared) and from the opened exe, the same.
+    let tables = out(|o| unsafe { op2f_game_exe_open(game, o) });
+    let read = out(|o| unsafe { op2f_game_exe_read(exe, o) });
+    let gog = unsafe { op2f_exe_is_gog_build(exe) };
+    assert_eq!(unsafe { (op2f_game_exe_is_gog_build(tables), op2f_game_exe_is_gog_build(read)) }, (gog, gog));
+    let warning = unsafe { op2f_game_exe_warning(tables, null_mut(), 0, null_mut()) };
+    assert_eq!(warning == Op2fStatus::NotFound, gog, "a warning only for another build");
+    let armor: Vec<u32> = (0..OP2F_ARMOR_CLASSES as u32).map(|a| unsafe { op2f_game_exe_armor_value(tables, a) }).collect();
+    assert!(armor[0] == 256 && armor.windows(2).all(|w| w[1] < w[0]), "{armor:?}");
+    assert_eq!(unsafe { op2f_game_exe_armor_value(read, 1) }, armor[1]);
+    assert_eq!(unsafe { op2f_game_exe_armor_value(tables, OP2F_ARMOR_CLASSES as u32) }, 256, "out of range: none");
+    unsafe { (op2f_game_exe_free(read), op2f_game_exe_free(tables)) };
 
     let sounds = out(|o| unsafe { op2f_exe_sound_files(exe, o) });
     unsafe { op2f_exe_free(exe) };
@@ -157,7 +172,9 @@ fn rules_techs_and_strings() {
     let lynx = out(|o| unsafe { op2f_rules_find(rules, Op2fRulesTable::Vehicles, c("light_tank").as_ptr(), o) });
     let stats = out(|o| unsafe { op2f_rules_vehicle(rules, lynx, o) });
     assert_eq!(field(&stats.code), "LIGHT_TANK");
-    assert_eq!(stats.armor, op2f_armor_value(stats.armor_class));
+    let tables = out(|o| unsafe { op2f_game_exe_open(game, o) });
+    assert_eq!(unsafe { op2f_game_exe_armor_value(tables, stats.armor_class) }, 180, "the Lynx: class 1");
+    unsafe { op2f_game_exe_free(tables) };
 
     // The typed row agrees with the plain sheet.
     let sheet = out(|o| unsafe { op2f_sheet_open(game, c("vehicles.txt").as_ptr(), o) });
@@ -374,8 +391,9 @@ fn sprite_details_unit_art_and_picking() {
     ok(unsafe { op2f_sprites_palette(sprites, 0, palette.as_mut_ptr()) });
 
     // A Lynx facing east: its chassis animation, frame 0's layers, and the drawn frame's pixels.
+    let tables = out(|o| unsafe { op2f_game_exe_open(game, o) });
     let lynx = c("Lynx");
-    let anim = out(|o| unsafe { op2f_vehicle_animation(lynx.as_ptr(), false, 0, 0, o) });
+    let anim = out(|o| unsafe { op2f_vehicle_animation(tables, lynx.as_ptr(), false, 0, 0, o) });
     let ainfo = out(|o| unsafe { op2f_sprites_animation_info(sprites, anim, o) });
     let finfo = out(|o| unsafe { op2f_sprites_frame_info(sprites, anim, 0, o) });
     assert!(finfo.layer_count > 0 && finfo.has_optional1, "the chassis says where its turret sits");
@@ -396,24 +414,30 @@ fn sprite_details_unit_art_and_picking() {
 
     // Tables of unit art, a turret by facing, and the tank drawn both ways.
     for table in [Op2fUnitArtTable::Vehicles, Op2fUnitArtTable::Buildings, Op2fUnitArtTable::Turrets] {
-        let n = op2f_unit_art_count(table);
-        assert!(n > 0 && !op2f_unit_art_code(table, n - 1).is_null() && op2f_unit_art_code(table, n).is_null());
+        let n = unsafe { op2f_unit_art_count(tables, table) };
+        assert!(n > 0, "{table:?}");
+        string(|b, c, l| unsafe { op2f_unit_art_code(tables, table, n - 1, b, c, l) });
+        assert_eq!(unsafe { op2f_unit_art_code(tables, table, n, null_mut(), 0, null_mut()) }, Op2fStatus::OutOfRange);
     }
+    let first = string(|b, c, l| unsafe { op2f_unit_art_code(tables, Op2fUnitArtTable::Vehicles, 0, b, c, l) });
+    assert!(!first.is_empty());
     assert_eq!(op2f_direction_column(op2f_column_rotation(5)), 5);
     let laser = c("LASER");
-    let turret = out(|o| unsafe { op2f_turret_animation(laser.as_ptr(), lynx.as_ptr(), false, 0, o) });
-    let (mut tx, mut ty, mut mx, mut my) = (0, 0, 0, 0);
+    let turret = out(|o| unsafe { op2f_turret_animation(tables, laser.as_ptr(), lynx.as_ptr(), false, 0, o) });
+    let (mut tx, mut ty, mut bx, mut by) = (0, 0, 9, 9);
     ok(unsafe { op2f_turret_offset(sprites, anim, &mut tx, &mut ty) });
-    ok(unsafe { op2f_muzzle_offset(sprites, anim, turret, &mut mx, &mut my) });
+    ok(unsafe { op2f_second_barrel(sprites, turret, &mut bx, &mut by) });
+    assert_eq!((bx, by), (0, 0), "a Lynx laser has one barrel");
     assert_eq!((tx, ty), (finfo.optional1[0] as i32, finfo.optional1[1] as i32));
-    let chassis = out(|o| unsafe { op2f_sprites_vehicle(sprites, lynx.as_ptr(), false, 0, 0, 2, o) });
+    let chassis = out(|o| unsafe { op2f_sprites_vehicle(tables, sprites, lynx.as_ptr(), false, 0, 0, 2, o) });
     let top = out(|o| unsafe { op2f_sprites_frame(sprites, turret, 0, 2, true, o) });
     let built = image(out(|o| unsafe { op2f_image_overlay(chassis, top, tx, ty, o) }));
-    let tank = image(out(|o| unsafe { op2f_sprites_tank(sprites, lynx.as_ptr(), laser.as_ptr(), false, 0, 2, o) }));
+    let tank = image(out(|o| unsafe { op2f_sprites_tank(tables, sprites, lynx.as_ptr(), laser.as_ptr(), false, 0, 2, o) }));
     assert!(built == tank, "chassis + turret by hand is the tank");
     unsafe { (op2f_image_free(chassis), op2f_image_free(top)) };
     let mut ambient = 9;
-    ok(unsafe { op2f_building_ambient(c("COMMAND").as_ptr(), false, &mut ambient) });
+    ok(unsafe { op2f_building_ambient(tables, c("COMMAND").as_ptr(), false, &mut ambient) });
+    unsafe { op2f_game_exe_free(tables) };
 
     // Picking: a click on the Lynx's hotspot selects it; one far off hits nothing.
     let shape = Op2fPickShape {

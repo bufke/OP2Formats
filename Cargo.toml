@@ -6,3 +6,7 @@ members = ["op2-formats", "op2-mapjson", "op2-opm", "op2formats-c"]
 [workspace.package]
 edition = "2024"
 license = "GPL-3.0-or-later"
+
+# Inherited by op2-formats (`iced-x86.workspace = true`), as op2-rs's tools workspace declares it.
+[workspace.dependencies]
+iced-x86 = { version = "1.21", default-features = false, features = ["std", "decoder", "intel", "instr_info"] }

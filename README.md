@@ -20,12 +20,13 @@ cutscenes, tables in `Outpost2.exe`, and the GOG and OPU installers.
 
 This is the `op2-formats` crate of [op2-rs](https://gitlab.com/bufke/op2-rs), bufke's
 reimplementation of Outpost 2, written by bufke and op2-rs's contributors. It was
-imported unmodified from op2-rs commit `9798188` (see the git history) so that other Outpost 2
-projects can use it on its own. All credit for the format work goes to them.
+imported unmodified so that other Outpost 2 projects can use it on its own; the copy here is
+op2-rs commit `f7e9a15` (see the git history). All credit for the format work goes to them.
 
 The code in `op2-formats/` is kept identical to upstream so updates can be brought over
-cleanly; changes needed to build it here live outside that folder. Fixes to the readers
-themselves should go to op2-rs too.
+cleanly; changes needed to build it here live outside that folder (the root `Cargo.toml`
+declares the workspace values it inherits, such as the `iced-x86` dependency). Fixes to the
+readers themselves should go to op2-rs too.
 
 ## License
 
@@ -50,8 +51,8 @@ installed, `find_package(OP2Formats)`; the top-level `CMakeLists.txt` runs Cargo
 ## Game data
 
 No game data is included or extracted into this repository: you need your own copy of
-Outpost 2. The one generated file, `op2-formats/src/units_table.rs`, is a table of sprite
-animation numbers read from `Outpost2.exe`, not game art.
+Outpost 2. The tables the game keeps in `Outpost2.exe` (which animations each unit draws,
+armor values, sound and music names) are read from the player's own copy when used.
 
 Tests that need the game find an install through `$OP2_DIR` (an Outpost 2 folder with OPU
 1.4.1) and skip their real-data checks without one. `OP2_REQUIRE_DATA=1` turns a skip into a
@@ -64,10 +65,8 @@ A few parts still assume op2-rs's repository layout. None affects normal use:
 - `source_tree_game_dir` looks for op2-rs's Wine prefix next to its build folder; here it
   finds nothing and the normal install search is used.
 - A cross-check in `tests/game_data.rs` (`rules_and_tech_trees_parse`) reads op2-rs's
-  recorded oracle runs and skips when they aren't there. With `OP2_REQUIRE_DATA=1` that
-  skip becomes a failure, so expect exactly this one test to fail in a real-data run; the
-  rest (68 of 69 with `--all-features`) pass against an OPU 1.4.1 install.
-- The installer tests (`inno_installer`, `opu_package`) need test installers named by their
+  recorded oracle runs and skips when they aren't there; only `OP2_REQUIRE_RUNS=1` (op2-rs's
+  switch for them) makes that a failure, so leave it unset here. With `OP2_REQUIRE_DATA=1`
+  every test passes against an OPU 1.4.1 install.
+- The installer tests (`inno_extract`, `opu_package`) need test installers named by their
   own variables (see `tests/inno_test.iss`) and pass without checking anything otherwise.
-- `scripts/unit_anims/extract.sh`, which regenerates `units_table.rs`, expects op2-rs's
-  `prefix/` and `vendor/TethysAPI` folders.

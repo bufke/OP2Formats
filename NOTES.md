@@ -2,16 +2,20 @@
 
 State and plan for OP2Formats. Newest first; keep it short and current.
 
-## Where it stands (2026-11-06)
+## Where it stands (2026-11-09)
 
 - `op2-formats/` is an unmodified copy of op2-rs's `tools/crates/op2-formats` at commit
-  `9798188` (commit `1705db3` here). It stays byte-identical to upstream; anything this repo
-  needs lives outside that folder (root `Cargo.toml` workspace, `rust-toolchain.toml`,
-  README, CI).
+  `f7e9a15` (re-synced 2026-11-09 from `9798188`). It stays byte-identical to upstream;
+  anything this repo needs lives outside that folder (root `Cargo.toml` workspace, including
+  the `iced-x86` workspace dependency, `rust-toolchain.toml`, README, CI).
+- Since that re-sync op2-formats reads the unit art, armor values and other tables from the
+  player's `Outpost2.exe` at runtime (`exe::GameExe`) instead of embedding them. The C
+  interface follows: the unit-art calls take an `Op2fGameExe` (`op2f_game_exe_open`), armor
+  values come from `op2f_game_exe_armor_value` (the stats structs lost their `armor` field),
+  and `op2f_muzzle_offset` became `op2f_second_barrel`. 316 functions, 33 structs.
 - Builds and tests on Windows (MSVC, Rust 1.99). With an OPU 1.4.1 install as `OP2_DIR` and
-  `OP2_REQUIRE_DATA=1`, 68 of 69 tests pass with `--all-features`; the failure is
-  `rules_and_tech_trees_parse`'s cross-check against op2-rs's recorded oracle runs, which
-  only exist in op2-rs.
+  `OP2_REQUIRE_DATA=1` every test passes with `--all-features` (op2-rs's recorded-run check
+  now follows its own `OP2_REQUIRE_RUNS`, which stays unset here).
 - CI (GitHub Actions, the repo is public since 2026-11-06) builds and tests the Rust crates on
   Ubuntu, Windows and macOS, with default and all features, without game data. Runs #6-#9
   failed only because a test expected no OPU downloader in an `--all-features` build (where
@@ -45,16 +49,18 @@ State and plan for OP2Formats. Newest first; keep it short and current.
    (`x86_64-pc-windows-gnu`, what op2remake's Qt build uses; Qt 6.12's MinGW is now on the dev
    machine; the CMake branch for it is written but untried) and the C/CMake side on Linux and
    macOS.
-2. **CI**: add the C side (cbindgen's output matches the committed header, the CMake example
+2. **The rest of `GameExe` in the C interface**: build lists, cell types, music names and
+   volumes, cursors, morale modifiers, research efficiency, select sounds.
+3. **CI**: add the C side (cbindgen's output matches the committed header, the CMake example
    builds) and a MinGW job.
-3. **Tile group JSON** (IDEAS.md): not in OP2MapJsonTools' format yet; agree a layout first.
-4. **op2-opm, next phase**: effective mission (a variant and difficulty merged onto the
+4. **Tile group JSON** (IDEAS.md): not in OP2MapJsonTools' format yet; agree a layout first.
+5. **op2-opm, next phase**: effective mission (a variant and difficulty merged onto the
    master), `.opm` to map and in-game coordinates, unit names to unit art, validation against
    the map and tech tree, setters in the C interface.
-5. **Upstream**: tell bufke about this repo; send reader fixes to op2-rs as merge requests;
+6. **Upstream**: tell bufke about this repo; send reader fixes to op2-rs as merge requests;
    to take in upstream changes, copy the folder again from a newer op2-rs commit and update
    the commit named in the README.
-6. **Name**: the crate is still `op2-formats`. Decide before publishing anywhere (crates.io
+7. **Name**: the crate is still `op2-formats`. Decide before publishing anywhere (crates.io
    needs a unique name; `outpost2-formats` was one idea).
 
 ## Checks before a commit
@@ -62,8 +68,8 @@ State and plan for OP2Formats. Newest first; keep it short and current.
 - `cargo clippy --workspace --all-targets -- -D warnings`, also with `--no-default-features`
   and `--all-features`.
 - `cargo test --workspace` and `cargo test --workspace --all-features` without game data (as CI
-  runs them), and with `OP2_DIR` + `OP2_REQUIRE_DATA=1` per crate (`-p op2-opm -p op2-mapjson
-  -p op2formats-c`; op2-formats' one expected failure stops the rest). Sample files outside
+  runs them), and with `OP2_DIR` + `OP2_REQUIRE_DATA=1` (all crates pass; leave
+  `OP2_REQUIRE_RUNS` unset). Sample files outside
   the repo: `OP2_OPM_DIR`, `OP2_MAPJSON`, `OP2_OPU_INSTALLER` (see each crate's README).
 - After changing the C interface: regenerate the header with cbindgen, check it compiles as C
   and C++ with warnings as errors, that every struct has the same size and alignment in C,

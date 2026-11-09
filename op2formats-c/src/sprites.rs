@@ -208,13 +208,14 @@ pub unsafe extern "C" fn op2f_sprites_hit(
 
 /// Which animation the game draws for a vehicle: `code` is its `vehicles.txt` code name (e.g. "LIGHT_TANK") or common
 /// name ("Lynx", "ConVec"), `state` 0 for normal (1-3 are working states, falling back to 0 like the game), and
-/// `rotation` its facing, 0-255 with 0 east, turning clockwise. Read from Outpost2.exe's unit types; see
-/// op2-formats' units.rs.
+/// `rotation` its facing, 0-255 with 0 east, turning clockwise. `tables` holds Outpost2.exe's unit art
+/// (`op2f_game_exe_open`).
 ///
 /// # Safety
-/// `code` is a string; `out` writable.
+/// `tables` is a live handle; `code` a string; `out` writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn op2f_vehicle_animation(
+    tables: *const Op2fGameExe,
     code: *const c_char,
     plymouth: bool,
     state: u32,
@@ -223,7 +224,7 @@ pub unsafe extern "C" fn op2f_vehicle_animation(
 ) -> Op2fStatus {
     guard(|| {
         let code = unsafe { str_arg(code, "code") }?;
-        let unit = units::vehicle(code).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no vehicle {code:?}")))?;
+        let unit = unit_art(tables)?.vehicle(code).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no vehicle {code:?}")))?;
         let anim = unit
             .chassis(plymouth, state as usize, units::direction_index(rotation))
             .ok_or_else(|| fail(Op2fStatus::NotFound, format!("{code} has no animation for that state and direction")))?;
@@ -236,12 +237,18 @@ pub unsafe extern "C" fn op2f_vehicle_animation(
 /// destroyed, 5-8 ambient animations. A slot the type doesn't have gives `OP2F_STATUS_NOT_FOUND`.
 ///
 /// # Safety
-/// `code` is a string; `out` writable.
+/// `tables` is a live handle; `code` a string; `out` writable.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn op2f_building_animation(code: *const c_char, plymouth: bool, slot: u32, out: *mut usize) -> Op2fStatus {
+pub unsafe extern "C" fn op2f_building_animation(
+    tables: *const Op2fGameExe,
+    code: *const c_char,
+    plymouth: bool,
+    slot: u32,
+    out: *mut usize,
+) -> Op2fStatus {
     guard(|| {
         let code = unsafe { str_arg(code, "code") }?;
-        let art = units::building(code).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no structure {code:?}")))?;
+        let art = unit_art(tables)?.building(code).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no structure {code:?}")))?;
         let anim = art.slots(plymouth).get(slot as usize).copied().filter(|&a| a != units::NONE);
         let anim = anim.ok_or_else(|| fail(Op2fStatus::NotFound, format!("{code} has no animation in slot {slot}")))?;
         unsafe { put_value(out, usize::from(anim)) }
@@ -252,9 +259,10 @@ pub unsafe extern "C" fn op2f_building_animation(code: *const c_char, plymouth: 
 /// image with its hotspot on the unit's position. `player` as in `op2f_sprites_frame`.
 ///
 /// # Safety
-/// `sprites` is a live handle; `chassis` and `weapon` strings; `out` writable.
+/// `tables` and `sprites` are live handles; `chassis` and `weapon` strings; `out` writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn op2f_sprites_tank(
+    tables: *const Op2fGameExe,
     sprites: *const Op2fSprites,
     chassis: *const c_char,
     weapon: *const c_char,
@@ -267,8 +275,9 @@ pub unsafe extern "C" fn op2f_sprites_tank(
         let sprites = &unsafe { obj(sprites, "sprites") }?.0;
         let chassis = unsafe { str_arg(chassis, "chassis") }?;
         let weapon = unsafe { str_arg(weapon, "weapon") }?;
-        let unit = units::vehicle(chassis).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no vehicle {chassis:?}")))?;
-        let turret = units::turret(weapon).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no weapon {weapon:?}")))?;
+        let art = unit_art(tables)?;
+        let unit = art.vehicle(chassis).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no vehicle {chassis:?}")))?;
+        let turret = art.turret(weapon).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no weapon {weapon:?}")))?;
         let sprite = units::tank_sprite(sprites, unit, turret, plymouth, rotation, tint(player)?).map_err(lib_err)?;
         unsafe { put(out, Op2fImage(sprite)) }
     })

@@ -9,7 +9,8 @@ pub struct Op2fFrameInfo {
     pub layer_count: usize,
     /// A field of unknown meaning, as stored (its top bit says `optional2` follows).
     pub unknown: u8,
-    /// Two optional offsets: on a chassis the turret's position, on a turret its muzzle (`op2f_turret_offset`).
+    /// Two optional offsets: on a chassis the turret's position (`op2f_turret_offset`), on a Tiger turret `optional2`
+    /// is its other barrel (`op2f_second_barrel`).
     pub has_optional1: bool,
     pub optional1: [i8; 2],
     pub has_optional2: bool,

@@ -64,10 +64,8 @@ pub struct Op2fVehicleStats {
     pub track: Op2fTrack,
     pub owner: Op2fOwner,
     pub hit_points: i32,
-    /// The sheet's armor class, 0-5.
+    /// The sheet's armor class, 0-5; its armor value is `op2f_game_exe_armor_value`'s.
     pub armor_class: u32,
-    /// The armor value the game derives from the class (`op2f_armor_value`).
-    pub armor: u32,
     /// Ticks per tile scale factor: step time = move_speed * the cell's track speed / 512.
     pub move_speed: i32,
     /// Rotation units (of 256 per turn) per tick.
@@ -117,8 +115,8 @@ pub struct Op2fBuildingStats {
     pub height: i32,
     pub owner: Op2fOwner,
     pub hit_points: i32,
+    /// As in `Op2fVehicleStats`.
     pub armor_class: u32,
-    pub armor: u32,
     pub border: bool,
     pub common_cost: i32,
     pub rare_cost: i32,
@@ -191,7 +189,6 @@ fn vehicle(v: &VehicleStats) -> Result<Op2fVehicleStats, Op2fStatus> {
         owner: v.owner.into(),
         hit_points: v.hit_points,
         armor_class: v.armor_class,
-        armor: v.armor(),
         move_speed: v.move_speed,
         turn_rate: v.turn_rate,
         common_cost: v.common_cost,
@@ -237,7 +234,6 @@ fn building(b: &BuildingStats) -> Result<Op2fBuildingStats, Op2fStatus> {
         owner: b.owner.into(),
         hit_points: b.hit_points,
         armor_class: b.armor_class,
-        armor: b.armor(),
         border: b.border,
         common_cost: b.common_cost,
         rare_cost: b.rare_cost,
@@ -289,12 +285,6 @@ fn mine(m: &MineYield) -> Result<Op2fMineYield, Op2fStatus> {
         min_truck: m.min_truck,
         min_yield_percent: m.min_yield_percent,
     })
-}
-
-/// The armor value the game derives from a sheet armor class (0-5), e.g. class 1 = 180, 5 = 40; 256 means none.
-#[unsafe(no_mangle)]
-pub extern "C" fn op2f_armor_value(armor_class: u32) -> u32 {
-    sheets::armor_value(armor_class)
 }
 
 // ---- Rules ----

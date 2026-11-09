@@ -32,41 +32,57 @@ pub enum Op2fUnitArtTable {
     Turrets,
 }
 
-fn codes(table: Op2fUnitArtTable) -> Vec<&'static str> {
+/// The unit art of a tables handle (`op2f_game_exe_open`).
+pub(crate) fn unit_art<'a>(tables: *const Op2fGameExe) -> Result<&'a units::UnitArt, Op2fStatus> {
+    Ok(&unsafe { obj(tables, "tables") }?.0.units)
+}
+
+fn codes(art: &units::UnitArt, table: Op2fUnitArtTable) -> Vec<&str> {
     match table {
-        Op2fUnitArtTable::Vehicles => units::vehicles().iter().map(|v| v.code).collect(),
-        Op2fUnitArtTable::Buildings => units::buildings().iter().map(|b| b.code).collect(),
-        Op2fUnitArtTable::Turrets => units::turrets().iter().map(|t| t.code).collect(),
+        Op2fUnitArtTable::Vehicles => art.vehicles.iter().map(|v| v.code.as_str()).collect(),
+        Op2fUnitArtTable::Buildings => art.buildings.iter().map(|b| b.code.as_str()).collect(),
+        Op2fUnitArtTable::Turrets => art.turrets.iter().map(|t| t.code.as_str()).collect(),
     }
 }
 
-/// Number of unit types in a table.
+/// Number of unit types in a table; 0 for a NULL handle.
+///
+/// # Safety
+/// `tables` is NULL or a live handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn op2f_unit_art_count(table: Op2fUnitArtTable) -> usize {
-    codes(table).len()
+pub unsafe extern "C" fn op2f_unit_art_count(tables: *const Op2fGameExe, table: Op2fUnitArtTable) -> usize {
+    unit_art(tables).map_or(0, |art| codes(art, table).len())
 }
 
-/// The code name of entry `index` of a table, e.g. "LIGHT_TANK", as a static string; NULL when out of range.
+/// The code name of entry `index` of a table, e.g. "LIGHT_TANK".
+///
+/// # Safety
+/// `tables` is a live handle; `buf` and `len` as in the string convention.
 #[unsafe(no_mangle)]
-pub extern "C" fn op2f_unit_art_code(table: Op2fUnitArtTable, index: usize) -> *const c_char {
-    // The table strings aren't NUL-terminated; keep one terminated copy of each for the process.
-    static CODES: std::sync::OnceLock<[Vec<std::ffi::CString>; 3]> = std::sync::OnceLock::new();
-    let all = CODES.get_or_init(|| {
-        [Op2fUnitArtTable::Vehicles, Op2fUnitArtTable::Buildings, Op2fUnitArtTable::Turrets]
-            .map(|t| codes(t).into_iter().map(|c| std::ffi::CString::new(c).expect("no NUL in a code")).collect())
-    });
-    all[table as usize].get(index).map_or(std::ptr::null(), |c| c.as_ptr())
+pub unsafe extern "C" fn op2f_unit_art_code(
+    tables: *const Op2fGameExe,
+    table: Op2fUnitArtTable,
+    index: usize,
+    buf: *mut c_char,
+    cap: usize,
+    len: *mut usize,
+) -> Op2fStatus {
+    guard(|| {
+        let codes = codes(unit_art(tables)?, table);
+        let code = self::index(&codes, index, "unit type")?;
+        unsafe { copy_str(code, buf, cap, len) }
+    })
 }
 
 /// The column of the ambient animation sequence a structure uses (0 = none; see `op2f_exe_ambient_sequence`).
 ///
 /// # Safety
-/// `code` is a string; `out` writable.
+/// `tables` is a live handle; `code` a string; `out` writable.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn op2f_building_ambient(code: *const c_char, plymouth: bool, out: *mut u8) -> Op2fStatus {
+pub unsafe extern "C" fn op2f_building_ambient(tables: *const Op2fGameExe, code: *const c_char, plymouth: bool, out: *mut u8) -> Op2fStatus {
     guard(|| {
         let code = unsafe { str_arg(code, "code") }?;
-        let art = units::building(code).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no structure {code:?}")))?;
+        let art = unit_art(tables)?.building(code).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no structure {code:?}")))?;
         unsafe { put_value(out, art.ambient(plymouth)) }
     })
 }
@@ -75,9 +91,10 @@ pub unsafe extern "C" fn op2f_building_ambient(code: *const c_char, plymouth: bo
 /// "MED_TANK"/"Panther", "BIG_TANK"/"Tiger" or "TOWER_GUARD" for a Guard Post), facing `rotation`.
 ///
 /// # Safety
-/// `weapon` and `chassis` are strings; `out` writable.
+/// `tables` is a live handle; `weapon` and `chassis` are strings; `out` writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn op2f_turret_animation(
+    tables: *const Op2fGameExe,
     weapon: *const c_char,
     chassis: *const c_char,
     plymouth: bool,
@@ -87,7 +104,7 @@ pub unsafe extern "C" fn op2f_turret_animation(
     guard(|| {
         let weapon = unsafe { str_arg(weapon, "weapon") }?;
         let chassis = unsafe { str_arg(chassis, "chassis") }?;
-        let art = units::turret(weapon).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no weapon {weapon:?}")))?;
+        let art = unit_art(tables)?.turret(weapon).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no weapon {weapon:?}")))?;
         let set = art
             .for_chassis(chassis)
             .ok_or_else(|| fail(Op2fStatus::NotFound, format!("{weapon} has no turret for {chassis}")))?;
@@ -110,24 +127,17 @@ pub unsafe extern "C" fn op2f_turret_offset(sprites: *const Op2fSprites, chassis
     })
 }
 
-/// Where shots leave the barrel, relative to the chassis's hotspot (inferred from the game's code, not yet checked
-/// against shots in game).
+/// A Tiger turret's other barrel: the turret animation's second offset from its hotspot, (0, 0) when it has none.
+/// The game fires from it for the Tiger's alternate shots.
 ///
 /// # Safety
 /// `sprites` is a live handle; `x` and `y` writable.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn op2f_muzzle_offset(
-    sprites: *const Op2fSprites,
-    chassis_animation: usize,
-    turret_animation: usize,
-    x: *mut i32,
-    y: *mut i32,
-) -> Op2fStatus {
+pub unsafe extern "C" fn op2f_second_barrel(sprites: *const Op2fSprites, turret_animation: usize, x: *mut i32, y: *mut i32) -> Op2fStatus {
     guard(|| {
         let s = &unsafe { obj(sprites, "sprites") }?.0;
-        index(&s.art.animations, chassis_animation, "animation")?;
         index(&s.art.animations, turret_animation, "animation")?;
-        let (ox, oy) = units::muzzle_offset(&s.art, chassis_animation, turret_animation);
+        let (ox, oy) = units::second_barrel(&s.art, turret_animation);
         unsafe { put_value(x, ox) }?;
         unsafe { put_value(y, oy) }
     })
@@ -137,9 +147,10 @@ pub unsafe extern "C" fn op2f_muzzle_offset(
 /// animation's whole canvas. `player` as in `op2f_sprites_frame`.
 ///
 /// # Safety
-/// `sprites` is a live handle; `code` a string; `out` writable.
+/// `tables` and `sprites` are live handles; `code` a string; `out` writable.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn op2f_sprites_vehicle(
+    tables: *const Op2fGameExe,
     sprites: *const Op2fSprites,
     code: *const c_char,
     plymouth: bool,
@@ -151,7 +162,7 @@ pub unsafe extern "C" fn op2f_sprites_vehicle(
     guard(|| {
         let s = &unsafe { obj(sprites, "sprites") }?.0;
         let code = unsafe { str_arg(code, "code") }?;
-        let unit = units::vehicle(code).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no vehicle {code:?}")))?;
+        let unit = unit_art(tables)?.vehicle(code).ok_or_else(|| fail(Op2fStatus::NotFound, format!("no vehicle {code:?}")))?;
         let sprite = units::chassis_sprite(s, unit, plymouth, rotation, frame, tint(player)?).map_err(lib_err)?;
         unsafe { put(out, Op2fImage(sprite)) }
     })

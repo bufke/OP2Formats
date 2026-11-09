@@ -30,6 +30,9 @@
 // Rows of the structures' ambient animation sequence (`op2f_exe_ambient_sequence`), 5 bytes each.
 #define OP2F_AMBIENT_ROWS 11
 
+// Number of sheet armor classes (0 to `OP2F_ARMOR_CLASSES` - 1).
+#define OP2F_ARMOR_CLASSES 6
+
 // Bytes of one 32x32 tile as RGBA.
 #define OP2F_TILE_RGBA_BYTES 4096
 
@@ -347,6 +350,10 @@ typedef struct Op2fExe Op2fExe;
 // An opened game folder: loose files (with OPU's overrides) and `.vol` archives, found by name.
 typedef struct Op2fGame Op2fGame;
 
+// Every table op2-formats reads from an Outpost2.exe, checked: the unit art (`op2f_vehicle_animation` and the
+// others taking this handle) and the armor values among them.
+typedef struct Op2fGameExe Op2fGameExe;
+
 // An RGBA image the library drew: a sprite image or a composited animation frame.
 typedef struct Op2fImage Op2fImage;
 
@@ -425,7 +432,8 @@ typedef struct Op2fFrameInfo {
   size_t layer_count;
   // A field of unknown meaning, as stored (its top bit says `optional2` follows).
   uint8_t unknown;
-  // Two optional offsets: on a chassis the turret's position, on a turret its muzzle (`op2f_turret_offset`).
+  // Two optional offsets: on a chassis the turret's position (`op2f_turret_offset`), on a Tiger turret `optional2`
+  // is its other barrel (`op2f_second_barrel`).
   bool has_optional1;
   int8_t optional1[2];
   bool has_optional2;
@@ -699,10 +707,8 @@ typedef struct Op2fVehicleStats {
   enum Op2fTrack track;
   enum Op2fOwner owner;
   int32_t hit_points;
-  // The sheet's armor class, 0-5.
+  // The sheet's armor class, 0-5; its armor value is `op2f_game_exe_armor_value`'s.
   uint32_t armor_class;
-  // The armor value the game derives from the class (`op2f_armor_value`).
-  uint32_t armor;
   // Ticks per tile scale factor: step time = move_speed * the cell's track speed / 512.
   int32_t move_speed;
   // Rotation units (of 256 per turn) per tick.
@@ -748,8 +754,8 @@ typedef struct Op2fBuildingStats {
   int32_t height;
   enum Op2fOwner owner;
   int32_t hit_points;
+  // As in `Op2fVehicleStats`.
   uint32_t armor_class;
-  uint32_t armor;
   bool border;
   int32_t common_cost;
   int32_t rare_cost;
@@ -1208,6 +1214,63 @@ enum Op2fStatus op2f_sound_lengths(const struct Op2fGame *game,
 
 // How long the Savant queue waits for a sound with `data_len` bytes of samples, in ms (as for 22 kHz 8-bit mono).
 uint32_t op2f_savant_ms(size_t data_len);
+
+// Whether the file is GOG's 1.2.0.7 build of Outpost2.exe, the one op2-formats is tested with.
+//
+// # Safety
+// `exe` is NULL or a live handle.
+bool op2f_exe_is_gog_build(const struct Op2fExe *exe);
+
+// The file's SHA-1 as 40 lowercase hex digits.
+//
+// # Safety
+// `exe` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_exe_sha1(const struct Op2fExe *exe, char *buf, size_t cap, size_t *len);
+
+// The tables of the game folder's `Outpost2.exe`. They are read once per folder and process (a few ms) and shared
+// by later calls; a failed read is tried again on the next call.
+//
+// # Safety
+// `game` is a live handle; `out` writable.
+enum Op2fStatus op2f_game_exe_open(const struct Op2fGame *game,
+                                   struct Op2fGameExe **out);
+
+// The tables of an exe read with `op2f_exe_open` or `op2f_exe_parse`. A table that fails its check gives
+// `OP2F_STATUS_INVALID_DATA` naming it.
+//
+// # Safety
+// `exe` is a live handle; `out` writable.
+enum Op2fStatus op2f_game_exe_read(const struct Op2fExe *exe,
+                                   struct Op2fGameExe **out);
+
+// # Safety
+// `tables` is NULL or a live handle, not used afterwards.
+void op2f_game_exe_free(struct Op2fGameExe *tables);
+
+// Whether the tables came from GOG's 1.2.0.7 build. Another build whose tables passed their checks works, with
+// `op2f_game_exe_warning`'s caveat.
+//
+// # Safety
+// `tables` is NULL or a live handle.
+bool op2f_game_exe_is_gog_build(const struct Op2fGameExe *tables);
+
+// What to tell the player about a build that isn't GOG's; `OP2F_STATUS_NOT_FOUND` when there is nothing to say.
+//
+// # Safety
+// `tables` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_game_exe_warning(const struct Op2fGameExe *tables,
+                                      char *buf,
+                                      size_t cap,
+                                      size_t *len);
+
+// The armor value the game derives from a sheet armor class (the `armor_class` of `op2f_rules_vehicle` and
+// `op2f_rules_building`), a damage factor out of 256: class 0 = 256 (none), 1 = 180, down to 5 = 40. 256 for a
+// class out of range, or a NULL handle.
+//
+// # Safety
+// `tables` is NULL or a live handle.
+uint32_t op2f_game_exe_armor_value(const struct Op2fGameExe *tables,
+                                   uint32_t armor_class);
 
 // Opens an Outpost 2 folder. With `dir` NULL: `$OP2_DIR`, else the first complete install found in the usual
 // places (GOG, Steam, registry). Files are looked up the way OPU layers them: `OPU/base`, `OPU/maps`, the folder
@@ -2740,12 +2803,13 @@ enum Op2fStatus op2f_sprites_hit(const struct Op2fSprites *sprites,
 
 // Which animation the game draws for a vehicle: `code` is its `vehicles.txt` code name (e.g. "LIGHT_TANK") or common
 // name ("Lynx", "ConVec"), `state` 0 for normal (1-3 are working states, falling back to 0 like the game), and
-// `rotation` its facing, 0-255 with 0 east, turning clockwise. Read from Outpost2.exe's unit types; see
-// op2-formats' units.rs.
+// `rotation` its facing, 0-255 with 0 east, turning clockwise. `tables` holds Outpost2.exe's unit art
+// (`op2f_game_exe_open`).
 //
 // # Safety
-// `code` is a string; `out` writable.
-enum Op2fStatus op2f_vehicle_animation(const char *code,
+// `tables` is a live handle; `code` a string; `out` writable.
+enum Op2fStatus op2f_vehicle_animation(const struct Op2fGameExe *tables,
+                                       const char *code,
                                        bool plymouth,
                                        uint32_t state,
                                        uint8_t rotation,
@@ -2756,8 +2820,9 @@ enum Op2fStatus op2f_vehicle_animation(const char *code,
 // destroyed, 5-8 ambient animations. A slot the type doesn't have gives `OP2F_STATUS_NOT_FOUND`.
 //
 // # Safety
-// `code` is a string; `out` writable.
-enum Op2fStatus op2f_building_animation(const char *code,
+// `tables` is a live handle; `code` a string; `out` writable.
+enum Op2fStatus op2f_building_animation(const struct Op2fGameExe *tables,
+                                        const char *code,
                                         bool plymouth,
                                         uint32_t slot,
                                         size_t *out);
@@ -2766,17 +2831,15 @@ enum Op2fStatus op2f_building_animation(const char *code,
 // image with its hotspot on the unit's position. `player` as in `op2f_sprites_frame`.
 //
 // # Safety
-// `sprites` is a live handle; `chassis` and `weapon` strings; `out` writable.
-enum Op2fStatus op2f_sprites_tank(const struct Op2fSprites *sprites,
+// `tables` and `sprites` are live handles; `chassis` and `weapon` strings; `out` writable.
+enum Op2fStatus op2f_sprites_tank(const struct Op2fGameExe *tables,
+                                  const struct Op2fSprites *sprites,
                                   const char *chassis,
                                   const char *weapon,
                                   bool plymouth,
                                   uint8_t rotation,
                                   int32_t player,
                                   struct Op2fImage **out);
-
-// The armor value the game derives from a sheet armor class (0-5), e.g. class 1 = 180, 5 = 40; 256 means none.
-uint32_t op2f_armor_value(uint32_t armor_class);
 
 // Loads `vehicles.txt`, `weapons.txt`, `building.txt`, `space.txt`, `mines.txt` and `morale.txt`.
 //
@@ -2976,18 +3039,29 @@ uint32_t op2f_direction_column(uint8_t rotation);
 // The rotation at the centre of a direction column (0-15).
 uint8_t op2f_column_rotation(uint32_t column);
 
-// Number of unit types in a table.
-size_t op2f_unit_art_count(enum Op2fUnitArtTable table);
+// Number of unit types in a table; 0 for a NULL handle.
+//
+// # Safety
+// `tables` is NULL or a live handle.
+size_t op2f_unit_art_count(const struct Op2fGameExe *tables, enum Op2fUnitArtTable table);
 
-// The code name of entry `index` of a table, e.g. "LIGHT_TANK", as a static string; NULL when out of range.
-const char *op2f_unit_art_code(enum Op2fUnitArtTable table,
-                               size_t index);
+// The code name of entry `index` of a table, e.g. "LIGHT_TANK".
+//
+// # Safety
+// `tables` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_unit_art_code(const struct Op2fGameExe *tables,
+                                   enum Op2fUnitArtTable table,
+                                   size_t index,
+                                   char *buf,
+                                   size_t cap,
+                                   size_t *len);
 
 // The column of the ambient animation sequence a structure uses (0 = none; see `op2f_exe_ambient_sequence`).
 //
 // # Safety
-// `code` is a string; `out` writable.
-enum Op2fStatus op2f_building_ambient(const char *code,
+// `tables` is a live handle; `code` a string; `out` writable.
+enum Op2fStatus op2f_building_ambient(const struct Op2fGameExe *tables,
+                                      const char *code,
                                       bool plymouth,
                                       uint8_t *out);
 
@@ -2995,8 +3069,9 @@ enum Op2fStatus op2f_building_ambient(const char *code,
 // "MED_TANK"/"Panther", "BIG_TANK"/"Tiger" or "TOWER_GUARD" for a Guard Post), facing `rotation`.
 //
 // # Safety
-// `weapon` and `chassis` are strings; `out` writable.
-enum Op2fStatus op2f_turret_animation(const char *weapon,
+// `tables` is a live handle; `weapon` and `chassis` are strings; `out` writable.
+enum Op2fStatus op2f_turret_animation(const struct Op2fGameExe *tables,
+                                      const char *weapon,
                                       const char *chassis,
                                       bool plymouth,
                                       uint8_t rotation,
@@ -3011,13 +3086,12 @@ enum Op2fStatus op2f_turret_offset(const struct Op2fSprites *sprites,
                                    int32_t *x,
                                    int32_t *y);
 
-// Where shots leave the barrel, relative to the chassis's hotspot (inferred from the game's code, not yet checked
-// against shots in game).
+// A Tiger turret's other barrel: the turret animation's second offset from its hotspot, (0, 0) when it has none.
+// The game fires from it for the Tiger's alternate shots.
 //
 // # Safety
 // `sprites` is a live handle; `x` and `y` writable.
-enum Op2fStatus op2f_muzzle_offset(const struct Op2fSprites *sprites,
-                                   size_t chassis_animation,
+enum Op2fStatus op2f_second_barrel(const struct Op2fSprites *sprites,
                                    size_t turret_animation,
                                    int32_t *x,
                                    int32_t *y);
@@ -3026,8 +3100,9 @@ enum Op2fStatus op2f_muzzle_offset(const struct Op2fSprites *sprites,
 // animation's whole canvas. `player` as in `op2f_sprites_frame`.
 //
 // # Safety
-// `sprites` is a live handle; `code` a string; `out` writable.
-enum Op2fStatus op2f_sprites_vehicle(const struct Op2fSprites *sprites,
+// `tables` and `sprites` are live handles; `code` a string; `out` writable.
+enum Op2fStatus op2f_sprites_vehicle(const struct Op2fGameExe *tables,
+                                     const struct Op2fSprites *sprites,
                                      const char *code,
                                      bool plymouth,
                                      uint8_t rotation,

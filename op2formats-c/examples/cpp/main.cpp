@@ -24,12 +24,14 @@ struct TilesetFree { void operator()(Op2fTileset* p) const { op2f_tileset_free(p
 struct SheetFree { void operator()(Op2fSheet* p) const { op2f_sheet_free(p); } };
 struct SpritesFree { void operator()(Op2fSprites* p) const { op2f_sprites_free(p); } };
 struct ImageFree { void operator()(Op2fImage* p) const { op2f_image_free(p); } };
+struct GameExeFree { void operator()(Op2fGameExe* p) const { op2f_game_exe_free(p); } };
 using Game = std::unique_ptr<Op2fGame, GameFree>;
 using Map = std::unique_ptr<Op2fMap, MapFree>;
 using Tileset = std::unique_ptr<Op2fTileset, TilesetFree>;
 using Sheet = std::unique_ptr<Op2fSheet, SheetFree>;
 using Sprites = std::unique_ptr<Op2fSprites, SpritesFree>;
 using Image = std::unique_ptr<Op2fImage, ImageFree>;
+using GameExe = std::unique_ptr<Op2fGameExe, GameExeFree>;
 
 // Writes an image as an uncompressed 32-bit TGA (BGRA, top-down), which most image viewers open.
 bool saveTga(const Op2fImage* image, const char* path) {
@@ -127,9 +129,14 @@ int main(int argc, char** argv) {
     std::printf("sprites: %zu images, %zu animations\n", op2f_sprites_image_count(sprites.get()),
                 op2f_sprites_animation_count(sprites.get()));
 
+    // Which animations a unit draws come from the game's Outpost2.exe.
+    Op2fGameExe* rawTables = nullptr;
+    if (!check(op2f_game_exe_open(game.get(), &rawTables), "reading Outpost2.exe's tables")) return 1;
+    GameExe tables(rawTables);
+
     // Player 1 is red; rotation 32 is south-east (0 east, clockwise).
     Op2fImage* rawImage = nullptr;
-    if (!check(op2f_sprites_tank(sprites.get(), "Lynx", "LASER", false, 32, 1, &rawImage), "drawing the Lynx")) return 1;
+    if (!check(op2f_sprites_tank(tables.get(), sprites.get(), "Lynx", "LASER", false, 32, 1, &rawImage), "drawing the Lynx")) return 1;
     Image lynx(rawImage);
     std::printf("lynx_laser.tga: %ux%u, hotspot (%d, %d)\n", op2f_image_width(lynx.get()), op2f_image_height(lynx.get()),
                 op2f_image_hotspot_x(lynx.get()), op2f_image_hotspot_y(lynx.get()));
@@ -138,7 +145,7 @@ int main(int argc, char** argv) {
     // Slot 0 is the construction sequence; its last frame is the finished structure.
     size_t anim = 0;
     Op2fAnimationInfo info;
-    if (!check(op2f_building_animation("COMMAND", true, 0, &anim), "finding the Command Center") ||
+    if (!check(op2f_building_animation(tables.get(), "COMMAND", true, 0, &anim), "finding the Command Center") ||
         !check(op2f_sprites_animation_info(sprites.get(), anim, &info), "reading its animation"))
         return 1;
     if (!check(op2f_sprites_frame(sprites.get(), anim, info.frame_count - 1, 0, false, &rawImage), "drawing it")) return 1;
