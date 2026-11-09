@@ -36,6 +36,23 @@
 // Bytes of one 32x32 tile as RGBA.
 #define OP2F_TILE_RGBA_BYTES 4096
 
+// Mission type values, as `DescBlock` stores them: a campaign mission's number is 1 to 12.
+#define OP2F_MISSION_COLONY -1
+
+#define OP2F_MISSION_AUTO_DEMO -2
+
+#define OP2F_MISSION_TUTORIAL -3
+
+#define OP2F_MISSION_LAND_RUSH -4
+
+#define OP2F_MISSION_SPACE_RACE -5
+
+#define OP2F_MISSION_RESOURCE_RACE -6
+
+#define OP2F_MISSION_MIDAS -7
+
+#define OP2F_MISSION_LAST_ONE_STANDING -8
+
 // An enum field whose name has no engine number (an unknown name, or an absent value).
 #define OP2F_OPM_UNKNOWN (-2147483647 - 1)
 
@@ -182,6 +199,16 @@ typedef enum Op2fCompression {
   OP2F_COMPRESSION_LZH,
   OP2F_COMPRESSION_UNKNOWN,
 } Op2fCompression;
+
+// A mission's text fields.
+typedef enum Op2fMissionText {
+  // `LevelDesc`: the text the game's menus show.
+  OP2F_MISSION_TEXT_LEVEL_DESC,
+  // `MapName`: the `.map` file, a bare file name.
+  OP2F_MISSION_TEXT_MAP_NAME,
+  // `TechtreeName`: the tech tree file, a bare file name.
+  OP2F_MISSION_TEXT_TECHTREE_NAME,
+} Op2fMissionText;
 
 // A text of the mission.
 typedef enum Op2fOpmText {
@@ -379,6 +406,12 @@ typedef struct Op2fMapTilesets Op2fMapTilesets;
 // A flattened menu template.
 typedef struct Op2fMenu Op2fMenu;
 
+// A mission DLL's description.
+typedef struct Op2fMission Op2fMission;
+
+// The mission DLLs of an install.
+typedef struct Op2fMissionList Op2fMissionList;
+
 // A Nullsoft (NSIS 3, LZMA) installer's files, as OPU's installer is built.
 typedef struct Op2fNsis Op2fNsis;
 
@@ -508,6 +541,37 @@ typedef struct Op2fVolEntryInfo {
   // The size in the index: for compressed entries the stored size, not the decoded one.
   uint32_t size;
 } Op2fVolEntryInfo;
+
+// `DescBlock` and `DescBlockEx`.
+typedef struct Op2fMissionDesc {
+  // A campaign mission's number (1 to 12), or an `OP2F_MISSION_*` value.
+  int32_t mission_type;
+  // Player slots the mission uses, AI included; for a multiplayer game the most human players.
+  int32_t players;
+  // The highest tech level the tech tree is loaded with.
+  int32_t max_tech_level;
+  // The colony report and economy update are skipped for human players.
+  bool unit_only;
+  // The DLL exports `DescBlockEx`.
+  bool has_desc_block_ex;
+  // `DescBlockEx`'s extra AI players in a multiplayer game; 0 without it.
+  int32_t extra_ai_players;
+  // The game's checksum of the whole file (see `op2f_mission_checksum`).
+  uint32_t checksum;
+  // Exports, for `op2f_mission_export`.
+  size_t export_count;
+  // Ways the file differs from what the game's own reader expects, for `op2f_mission_warning`; 0 for every
+  // shipped DLL.
+  size_t warning_count;
+} Op2fMissionDesc;
+
+// One export.
+typedef struct Op2fMissionExport {
+  // The address, relative to the image base.
+  uint32_t rva;
+  // In a code section: a function rather than data.
+  bool is_code;
+} Op2fMissionExport;
 
 // The level details' numbers.
 typedef struct Op2fOpmLevel {
@@ -1910,6 +1974,120 @@ enum Op2fStatus op2f_vol_read_stored(const struct Op2fVol *vol,
 // # Safety
 // `data` is `len` readable bytes; `out` writable.
 enum Op2fStatus op2f_lzh_decompress(const uint8_t *data, size_t len, struct Op2fBytes **out);
+
+// Reads a mission DLL's description. A DLL that isn't a mission (no `DescBlock`, or without `LevelDesc`,
+// `MapName` or `TechtreeName`) is `OP2F_STATUS_INVALID_DATA`.
+//
+// # Safety
+// `path` is a string; `out` writable.
+enum Op2fStatus op2f_mission_open(const char *path,
+                                  struct Op2fMission **out);
+
+// Reads a mission DLL's description from its bytes.
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_mission_parse(const uint8_t *data, size_t len, struct Op2fMission **out);
+
+// # Safety
+// `mission` is NULL or a live handle, not used afterwards.
+void op2f_mission_free(struct Op2fMission *mission);
+
+// # Safety
+// `mission` is a live handle; `out` writable.
+enum Op2fStatus op2f_mission_desc(const struct Op2fMission *mission, struct Op2fMissionDesc *out);
+
+// Copies one of the mission's text fields (Windows-1252 bytes as Latin-1, encoded as UTF-8).
+//
+// # Safety
+// `mission` is a live handle; `buf` has `cap` writable bytes (or is NULL with `cap` 0); `len` is NULL or writable.
+enum Op2fStatus op2f_mission_text(const struct Op2fMission *mission,
+                                  enum Op2fMissionText which,
+                                  char *buf,
+                                  size_t cap,
+                                  size_t *len);
+
+// Export `index` (0 to `export_count` - 1, in the export table's name order); its name goes to `buf`.
+//
+// # Safety
+// `mission` is a live handle; `out` is NULL or writable; `buf`/`len` as for `op2f_mission_text`.
+enum Op2fStatus op2f_mission_export(const struct Op2fMission *mission,
+                                    size_t index,
+                                    struct Op2fMissionExport *out,
+                                    char *buf,
+                                    size_t cap,
+                                    size_t *len);
+
+// Whether the DLL exports `name` (case-sensitive, as the game looks names up).
+//
+// # Safety
+// `mission` is a live handle; `name` a string; `out` writable.
+enum Op2fStatus op2f_mission_has_export(const struct Op2fMission *mission,
+                                        const char *name,
+                                        bool *out);
+
+// Warning `index` (0 to `warning_count` - 1): a way the file differs from what the game's PE reader expects.
+//
+// # Safety
+// `mission` is a live handle; `buf`/`len` as for `op2f_mission_text`.
+enum Op2fStatus op2f_mission_warning(const struct Op2fMission *mission,
+                                     size_t index,
+                                     char *buf,
+                                     size_t cap,
+                                     size_t *len);
+
+// The game's checksum of a file's bytes (0x40C050): what a multiplayer game compares for the mission DLL and map.
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_mission_checksum(const uint8_t *data,
+                                      size_t len,
+                                      uint32_t *out);
+
+// The type and player count a multiplayer mission's file name gives, the way the lobby reads it: `m`, a type letter
+// (`u`, `f`, `r`, `m`, `l`), a digit from 2 to 6. `OP2F_STATUS_NOT_FOUND` for any other name.
+//
+// # Safety
+// `file_name` is a string; `mission_type` and `players` writable.
+enum Op2fStatus op2f_mission_name_type(const char *file_name,
+                                       int32_t *mission_type,
+                                       int32_t *players);
+
+// Every mission DLL among the install's loose files (the game folder's and OPU's `base` and `maps` folders), one
+// per file name, sorted by file name; DLLs that aren't missions are left out.
+//
+// # Safety
+// `game` is a live handle; `out` writable.
+enum Op2fStatus op2f_game_missions(const struct Op2fGame *game,
+                                   struct Op2fMissionList **out);
+
+// # Safety
+// `list` is NULL or a live handle, not used afterwards; missions taken from it with `op2f_mission_list_get` go with
+// it.
+void op2f_mission_list_free(struct Op2fMissionList *list);
+
+// # Safety
+// `list` is a live handle; `out` writable.
+enum Op2fStatus op2f_mission_list_count(const struct Op2fMissionList *list, size_t *out);
+
+// Mission `index`'s full path.
+//
+// # Safety
+// `list` is a live handle; `buf`/`len` as for `op2f_mission_text`.
+enum Op2fStatus op2f_mission_list_path(const struct Op2fMissionList *list,
+                                       size_t index,
+                                       char *buf,
+                                       size_t cap,
+                                       size_t *len);
+
+// Mission `index`, for the `op2f_mission_*` getters. The handle belongs to the list: don't free it, and don't use it
+// after `op2f_mission_list_free`.
+//
+// # Safety
+// `list` is a live handle; `out` writable.
+enum Op2fStatus op2f_mission_list_get(const struct Op2fMissionList *list,
+                                      size_t index,
+                                      const struct Op2fMission **out);
 
 // Reads an `.opm` file. Any known writer's layout reads: OP2MissionEditor's, the SDK tools', the older SDK layout,
 // with comments, trailing commas, `null`s and members in any order.

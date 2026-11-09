@@ -14,6 +14,7 @@ OP2Formats/
 │   ├── install.rs      # Finding and checking an install (GOG, CD, Wine/Proton front ends; OPU version)
 │   ├── vol.rs, lzh.rs  # .vol archives and their LZH compression
 │   ├── map.rs          # .map: tiles, tileset slots, mappings, terrain types, tile groups; parse and write
+│   ├── mission.rs      # Mission DLLs: DescBlock, the texts, exports, the game's file checksum (read as data)
 │   ├── tileset.rs      # Tileset images (PBMP and BMP strips of 32x32 tiles)
 │   ├── render.rs       # Drawing a map to RGBA; tile_palette.rs prepares GPU tile layers; virmask.rs the Blight
 │   ├── art.rs          # op2_art.prt + OP2_ART.BMP: palettes, images, animations, frames drawn in player colours
@@ -186,8 +187,7 @@ The library stores nothing of its own. What it reads:
 
 - The rest of `GameExe` in the C interface (build lists, cell types, music, cursors, morale modifiers).
 - C and CMake checks in CI; a MinGW build (op2remake's Qt toolchain).
-- 0.2: every Outpost 2 format in op2-formats: saved games, mission DLLs, story texts, settings, tile group JSON,
-  OP2Mapper2's files and OP2Lua missions (NOTES.md). The `opm` module's next phase (variant and difficulty merged,
+- 0.2: tile group JSON, and the `.opm` model's fixes (NOTES.md). The `opm` module's next phase (variant and difficulty merged,
   coordinates, validation, C setters).
 - The C crate follows API changes in op2-formats (as when unit art moved from built-in tables to `GameExe`).
 

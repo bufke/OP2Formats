@@ -105,6 +105,12 @@ impl GameFiles {
         self.loose.get(&name.to_ascii_lowercase()).map(|(dir, rel)| self.dirs[*dir].join(rel))
     }
 
+    /// Every loose file the lookups can resolve to: one per file name, the one that wins (OPU's `base` over its
+    /// `maps` over the game folder). In no particular order.
+    pub fn loose_files(&self) -> impl Iterator<Item = PathBuf> + '_ {
+        self.loose.values().map(|(dir, rel)| self.dirs[*dir].join(rel))
+    }
+
     /// Every distinct `.map` file name available, sorted.
     pub fn map_names(&self) -> Vec<String> {
         let mut names: Vec<String> = self

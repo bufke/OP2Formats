@@ -27,6 +27,7 @@ It covers all of op2-formats, one source file per area:
 | Windows resources | the game's DLLs: bitmaps (with palettes), cursors and icons, string tables, dialogs, menus, version strings; `.bmp`, `.cur`, `.ico` and `.ani` files | `resources.rs` |
 | Installers | GOG's offline installer (feature `inno`), OPU's installer and its install (`opu`), downloading OPU (`fetch-opu`) | `installers.rs` |
 | JSON maps | `.map` to and from OP2MapJsonTools' JSON (PerRowPadded): parse, write, header texts, to an `Op2fMap` (with or without a base map) and from one | `mapjson.rs` |
+| Mission DLLs | a level's description read from its DLL without loading it: type, players, maximum tech level, unit-only flag, menu text, map and tech tree, `DescBlockEx`'s AI players; its exports; the game's file checksum; a multiplayer file name's type and players; every mission of an install (`op2f_game_missions`) | `mission.rs` |
 | Missions (`.opm`) | read or write OP2MissionEditor's JSON missions: level details, variants, players and their resources, units (with cargo decoded), walls and tubes, beacons, markers, wreckage, music; the whole mission as canonical JSON for the rest (triggers, regions, disasters, layouts) | `opm.rs` |
 | Lists | string lists, tables and pairs the other calls return | `common.rs` |
 
@@ -126,8 +127,8 @@ cd op2formats-c
 cbindgen --config cbindgen.toml --output include/op2formats.h
 ```
 
-`tests/c_api.rs` and `tests/all_areas.rs` call the functions the way C does, every area against real game files
-where it can, comparing with another route to the same data (a map written back is the file it came from, a frame
+`tests/c_api.rs`, `tests/all_areas.rs`, `tests/opm.rs`, `tests/mapjson.rs` and `tests/mission.rs` call the
+functions the way C does, every area against real game files where it can, comparing with another route to the same data (a map written back is the file it came from, a frame
 decoded straight away is the one decoded in order, a hand-built tank is the drawn one). They need `OP2_DIR` (an
 Outpost 2 install with OPU 1.4.1) and skip without it; `OP2_REQUIRE_DATA=1` makes the skip a failure. With
 `OP2_OPU_INSTALLER` naming OPU's official `OPUInstaller-1.4.1.exe` (from outpost2.net; never commit it), the OPU

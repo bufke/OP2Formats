@@ -20,7 +20,7 @@ State and plan for OP2Formats. Newest first; keep it short and current.
   player's `Outpost2.exe` at runtime (`exe::GameExe`) instead of embedding them. The C
   interface follows: the unit-art calls take an `Op2fGameExe` (`op2f_game_exe_open`), armor
   values come from `op2f_game_exe_armor_value` (the stats structs lost their `armor` field),
-  and `op2f_muzzle_offset` became `op2f_second_barrel`. 316 functions, 33 structs.
+  and `op2f_muzzle_offset` became `op2f_second_barrel`. 316 functions, 33 structs then; 331 and 35 with the mission DLL functions.
 - Builds and tests on Windows (MSVC, Rust 1.99). With an OPU 1.4.1 install as `OP2_DIR` and
   `OP2_REQUIRE_DATA=1` every test passes with `--all-features` (op2-rs's recorded-run check
   now follows its own `OP2_REQUIRE_RUNS`, which stays unset here).
@@ -65,10 +65,10 @@ State and plan for OP2Formats. Newest first; keep it short and current.
 5. **`opm`, next phase**: effective mission (a variant and difficulty merged onto the
    master), `.opm` to map and in-game coordinates, unit names to unit art, validation against
    the map and tech tree, setters in the C interface.
-6. **0.2, every format**: readers (and writers where a tool needs one) for what op2-formats
-   doesn't read yet: saved games (`.op2`), mission DLLs, story texts, settings (`.ini`), tile
-   group JSON, OP2Mapper2's `.ctl`/`.map.dat`/`.tpl` files and OP2Lua missions. Then fix the
-   `opm` model's known mistakes (MissionType values, BotType, Region ID; see the findings).
+6. **0.2**: mission DLLs are read (`mission`, 2026-11-10: description, exports, checksum; in
+   the C interface as `op2f_mission_*`). Still to do: tile group JSON, and the `opm` model's
+   known mistakes (MissionType values, BotType, Region ID). Not planned: saved games and
+   OP2Mapper2's files (the user's call: OP2Mapper2 is old and unused).
 7. **Releases**: op2-rs needs reader fixes released within days. bufke to be added as a
    crates.io owner. The repo stays on leviathan400 for now (OutpostUniverse maybe later).
 

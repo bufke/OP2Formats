@@ -5,6 +5,7 @@ type and player count) and whose code sets it up and runs it through the game's 
 description straight out of the file to build its menus, then loads the DLL with `LoadLibrary` when a game starts.
 This document covers what the game needs from the file: the names, the exports and their layouts, how and when
 each is used, and the save-region contract. The mission API itself (units, triggers, groups) is not covered.
+op2-formats' `mission` module reads the description, the exports and the checksum, without loading the DLL.
 
 Unless a section says otherwise, the numbers were measured on GOG Outpost 2 with OPU 1.4.1 by a probe that reads
 each DLL's PE headers and export table (all 284 `.dll` files in the game folder and under `OPU`), and the behaviour
@@ -359,5 +360,6 @@ OP2Lua DLLs import from `Outpost2.exe` (18 to 168 functions).
 - OPU 1.4.1's `CHANGES.md`: the folder layout and search order, the extra exports.
 - op2-rs (bufke's reimplementation): measured the mission cycle's order and timing, the unit-only flag's effect, the
   reload of a DLL's globals after a load, the tech tree beside the DLL, and OPU's installer layout.
+- op2-formats `mission.rs`; `tests/missions.rs` checks this document's counts against an OPU 1.4.1 install.
 - Measured: the 284 DLLs in the game folder and under `OPU`, with a probe reading PE headers, export tables and
   imports, and decoding each `GetSaveRegions`; the 106 game-folder copies compared with `OPU\base\maps`.

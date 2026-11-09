@@ -5,8 +5,8 @@ Multiplatform Outpost 2 file formats library.
 OP2Formats reads the data files of Outpost 2 (Dynamix/Sierra, 1997) in pure Rust, so the
 same code runs on Windows, Linux and macOS: `.vol` archives (including LZH-compressed
 entries), `.map` files, tilesets, `op2_art.prt` sprites, the stat sheets, sounds, the AVI
-cutscenes, tables in `Outpost2.exe`, the GOG and OPU installers, and the community tools' `.opm`
-missions and JSON maps.
+cutscenes, tables in `Outpost2.exe`, mission DLLs' descriptions, the GOG and OPU installers,
+and the community tools' `.opm` missions and JSON maps.
 
 ## Layout
 

@@ -21,7 +21,7 @@ missions, OP2Mapper2's files, OP2Lua missions) are in [../docs-community/](../do
 | The Blight's masks | `virmask.raw` | [virmask.md](virmask.md) | op2-formats `virmask` |
 | Game tables | `Outpost2.exe` | [exe-tables.md](exe-tables.md) | op2-formats `exe` |
 | Resources | `out2res.dll` and the other DLLs | [resources.md](resources.md) | op2-formats `pe_res` |
-| Mission DLLs | `c*.dll`, `e*.dll`, `p*.dll`, `ml*.dll`, ... and OPU's mission packs | [mission-dlls.md](mission-dlls.md) | not read |
+| Mission DLLs | `c*.dll`, `e*.dll`, `p*.dll`, `ml*.dll`, ... and OPU's mission packs | [mission-dlls.md](mission-dlls.md) | op2-formats `mission` |
 | Story texts | `story.vol`: briefings, objectives and story `.rtf`, `ch_title.txt`, `credits.txt` | [story.md](story.md) | not read |
 | Settings | `outpost2.ini` (and OPU's), OPU's `base/ui` | [settings.md](settings.md) | not read |
 

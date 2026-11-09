@@ -17,6 +17,7 @@ pub mod map;
 pub mod mapjson;
 #[cfg(feature = "inno")]
 mod md5;
+pub mod mission;
 #[cfg(feature = "opu")]
 pub mod nsis;
 #[cfg(feature = "opm")]
