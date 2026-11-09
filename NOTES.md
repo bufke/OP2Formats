@@ -61,13 +61,14 @@ State and plan for OP2Formats. Newest first; keep it short and current.
    volumes, cursors, morale modifiers, research efficiency, select sounds.
 3. **CI**: add the C side (cbindgen's output matches the committed header, the CMake example
    builds) and a MinGW job.
-4. **Tile group JSON** (IDEAS.md): not in OP2MapJsonTools' format yet; agree a layout first.
+4. **Tile groups in JSON maps** (IDEAS.md): a JSON map has no `tileGroups` member yet; agree a layout first.
 5. **`opm`, next phase**: effective mission (a variant and difficulty merged onto the
    master), `.opm` to map and in-game coordinates, unit names to unit art, validation against
    the map and tech tree, setters in the C interface.
 6. **0.2**: mission DLLs are read (`mission`, 2026-11-10: description, exports, checksum; in
-   the C interface as `op2f_mission_*`). Still to do: tile group JSON, and the `opm` model's
-   known mistakes (MissionType values, BotType, Region ID). Not planned: saved games and
+   the C interface as `op2f_mission_*`), and tile group JSON (`mapjson::TileGroupJson`,
+   2026-11-10; `op2f_tilegroup_*`, `op2f_map_add_tile_group`; 345 functions). Still to do:
+   the `opm` model's known mistakes (MissionType values, BotType, Region ID). Not planned: saved games and
    OP2Mapper2's files (the user's call: OP2Mapper2 is old and unused).
 7. **Releases**: op2-rs needs reader fixes released within days. bufke to be added as a
    crates.io owner. The repo stays on leviathan400 for now (OutpostUniverse maybe later).

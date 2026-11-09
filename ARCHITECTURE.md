@@ -187,7 +187,7 @@ The library stores nothing of its own. What it reads:
 
 - The rest of `GameExe` in the C interface (build lists, cell types, music, cursors, morale modifiers).
 - C and CMake checks in CI; a MinGW build (op2remake's Qt toolchain).
-- 0.2: tile group JSON, and the `.opm` model's fixes (NOTES.md). The `opm` module's next phase (variant and difficulty merged,
+- 0.2: the `.opm` model's fixes (NOTES.md). The `opm` module's next phase (variant and difficulty merged,
   coordinates, validation, C setters).
 - The C crate follows API changes in op2-formats (as when unit art moved from built-in tables to `GameExe`).
 

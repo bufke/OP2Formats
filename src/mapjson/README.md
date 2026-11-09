@@ -42,6 +42,24 @@ them from a base map of the same size, such as the map the JSON came from; `to_m
 values: version 0x1011, 512 slots, no tile groups, those bits clear. Every shipped map converts to JSON and back to
 the same `.map` bytes with itself as the base.
 
+## Tile group JSON
+
+`TileGroupJson` reads and writes one tile group per file, the format OP2Mapper3 and OP2TileSetTools use
+([tile-group-json.md](../../docs-community/tile-group-json.md)), in the same layout, and converts to and from a `.map`'s
+tile groups:
+
+```rust
+let mut map = files.read_map("cm01.map")?;
+for group in op2_formats::mapjson::map_tile_groups(&map)? {
+    group.save(format!("{}.json", group.name))?;
+}
+let group = op2_formats::mapjson::TileGroupJson::open("snowroc9.json")?;
+map.tile_groups.push(group.to_map_group());
+```
+
+Reading takes rows padded or not, the older flat `tiles` array, missing header texts, and unknown members (written
+back); the rows set the size. Every value must be a mapping index, 0 to 2047.
+
 ## Differences from OP2MapJsonTools
 
 - JSON to `.map` uses the JSON's own tile mappings and terrain types, and works for any width that is a power of two

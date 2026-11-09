@@ -191,6 +191,16 @@ typedef enum Op2fMapJsonText {
   OP2F_MAP_JSON_TEXT_NOTES,
 } Op2fMapJsonText;
 
+// A tile group's header texts.
+typedef enum Op2fTileGroupText {
+  // The tileset's 6-character prefix, `well00` for the game's.
+  OP2F_TILE_GROUP_TEXT_TILESET,
+  OP2F_TILE_GROUP_TEXT_NAME,
+  // The picture's file name, `<name>.bmp`, or empty.
+  OP2F_TILE_GROUP_TEXT_BMP,
+  OP2F_TILE_GROUP_TEXT_NOTES,
+} Op2fTileGroupText;
+
 // How a `.vol` entry is stored. Only `NONE` and `LZH` are read (the game's archives use nothing else).
 typedef enum Op2fCompression {
   OP2F_COMPRESSION_NONE,
@@ -446,6 +456,10 @@ typedef struct Op2fStringTable Op2fStringTable;
 // A tech tree file (`edentek.txt`, `ply_tek.txt`, `multitek.txt`, `tutortek.txt`): its research topics.
 typedef struct Op2fTechTree Op2fTechTree;
 
+// A tile group JSON file (OP2Mapper3's and OP2TileSetTools' format): one tile group, its header texts and its rows
+// of tile mapping indices.
+typedef struct Op2fTileGroupJson Op2fTileGroupJson;
+
 // Every distinct tile graphic a map uses, as layers of a texture array, so a GPU renderer needs only a layer index
 // per tile. Layer `OP2F_MISSING_LAYER` is a magenta and black checkerboard for unresolved tiles.
 typedef struct Op2fTilePalette Op2fTilePalette;
@@ -532,6 +546,12 @@ typedef struct Op2fMapJsonInfo {
   // x1, y1, x2, y2: the JSON's, or the default.
   int32_t clip_rect[4];
 } Op2fMapJsonInfo;
+
+// A tile group (the editor's named blocks of tiles): its size in tiles.
+typedef struct Op2fTileGroupInfo {
+  uint32_t width;
+  uint32_t height;
+} Op2fTileGroupInfo;
 
 // A `.vol` entry's storage.
 typedef struct Op2fVolEntryInfo {
@@ -678,12 +698,6 @@ typedef struct Op2fOpmWreckage {
   int32_t tech_id;
   bool is_visible;
 } Op2fOpmWreckage;
-
-// A tile group (the editor's named blocks of tiles): its size in tiles.
-typedef struct Op2fTileGroupInfo {
-  uint32_t width;
-  uint32_t height;
-} Op2fTileGroupInfo;
 
 // One resource's ids and size.
 typedef struct Op2fResourceInfo {
@@ -1910,6 +1924,103 @@ enum Op2fStatus op2f_mapjson_set_text(struct Op2fMapJson *json,
 enum Op2fStatus op2f_mapjson_to_map(const struct Op2fMapJson *json,
                                     const struct Op2fMap *base,
                                     struct Op2fMap **out);
+
+// Parses tile group JSON. Rows can be padded or not, and the older flat `tiles` array (with the header's width and
+// height) reads too; when the header's size disagrees with the rows, the rows win.
+//
+// # Safety
+// `data` is `len` readable bytes; `out` writable.
+enum Op2fStatus op2f_tilegroup_parse(const uint8_t *data,
+                                     size_t len,
+                                     struct Op2fTileGroupJson **out);
+
+// # Safety
+// `path` is a string; `out` writable.
+enum Op2fStatus op2f_tilegroup_open(const char *path, struct Op2fTileGroupJson **out);
+
+// A new group of `width` by `height` tiles, all mapping index 0, with the tileset `well00` and empty texts.
+//
+// # Safety
+// `out` writable.
+enum Op2fStatus op2f_tilegroup_new(uint32_t width,
+                                   uint32_t height,
+                                   struct Op2fTileGroupJson **out);
+
+// A map's tile group `index` as JSON, with the map's tileset prefix (`well00` for the shipped maps).
+//
+// # Safety
+// `map` is a live handle; `out` writable.
+enum Op2fStatus op2f_tilegroup_from_map(const struct Op2fMap *map,
+                                        size_t index,
+                                        struct Op2fTileGroupJson **out);
+
+// # Safety
+// `tile_group` is NULL or a live handle, not used afterwards.
+void op2f_tilegroup_free(struct Op2fTileGroupJson *tile_group);
+
+// The JSON text as OP2Mapper3 and OP2TileSetTools write it (two-space indents, CRLF, one line per row, numbers
+// padded to 4).
+//
+// # Safety
+// `tile_group` is a live handle; `out` writable.
+enum Op2fStatus op2f_tilegroup_write(const struct Op2fTileGroupJson *tile_group,
+                                     struct Op2fBytes **out);
+
+// # Safety
+// `tile_group` is a live handle; `path` a string.
+enum Op2fStatus op2f_tilegroup_save(const struct Op2fTileGroupJson *tile_group, const char *path);
+
+// The group's size in tiles (from its rows).
+//
+// # Safety
+// `tile_group` is a live handle; `out` writable.
+enum Op2fStatus op2f_tilegroup_info(const struct Op2fTileGroupJson *tile_group,
+                                    struct Op2fTileGroupInfo *out);
+
+// The group's mapping indices, row by row (width * height of them), into `out`, which holds `count`.
+//
+// # Safety
+// `tile_group` is a live handle; `out` is `count` writable values.
+enum Op2fStatus op2f_tilegroup_tiles(const struct Op2fTileGroupJson *tile_group,
+                                     uint16_t *out,
+                                     size_t count);
+
+// Replaces the group's tiles: `width` * `height` mapping indices (0 to 2047), row by row.
+//
+// # Safety
+// `tile_group` is a live handle not used by another thread meanwhile; `tiles` is `width` * `height` readable values.
+enum Op2fStatus op2f_tilegroup_set_tiles(struct Op2fTileGroupJson *tile_group,
+                                         uint32_t width,
+                                         uint32_t height,
+                                         const uint16_t *tiles);
+
+// # Safety
+// `tile_group` is a live handle; `buf` and `len` as in the string convention.
+enum Op2fStatus op2f_tilegroup_text(const struct Op2fTileGroupJson *tile_group,
+                                    enum Op2fTileGroupText field,
+                                    char *buf,
+                                    size_t cap,
+                                    size_t *len);
+
+// # Safety
+// `tile_group` is a live handle not used by another thread meanwhile; `value` a string.
+enum Op2fStatus op2f_tilegroup_set_text(struct Op2fTileGroupJson *tile_group,
+                                        enum Op2fTileGroupText field,
+                                        const char *value);
+
+// Adds the group to a map's tile groups, at the end (its name and tiles; the other texts have no place in a
+// `.map`). The map's mappings aren't checked: the indices are placed as they are.
+//
+// # Safety
+// `map` is a live handle not used by another thread meanwhile; `tile_group` a live handle.
+enum Op2fStatus op2f_map_add_tile_group(struct Op2fMap *map,
+                                        const struct Op2fTileGroupJson *tile_group);
+
+// Removes a map's tile group `index`; the later ones move down.
+//
+// # Safety
+// `map` is a live handle not used by another thread meanwhile.
+enum Op2fStatus op2f_map_remove_tile_group(struct Op2fMap *map, size_t index);
 
 // Opens a `.vol` archive by path. Entries are read from the file when asked for.
 //

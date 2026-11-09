@@ -16,6 +16,7 @@
 //! (version 0x1011, 512 slots, no tile groups).
 
 mod terrain;
+pub mod tilegroup;
 mod write;
 
 use crate::Map;
@@ -24,6 +25,7 @@ use serde::Deserialize;
 use serde_json::{Map as JsonMap, Value};
 
 pub use terrain::{Range16, TERRAIN_TYPE_BYTES, TerrainType};
+pub use tilegroup::{TileGroupJson, map_tile_groups, tileset_prefix};
 
 /// The version tag the shipped maps have, used for a map made without a base.
 pub const DEFAULT_VERSION: u32 = 0x1011;

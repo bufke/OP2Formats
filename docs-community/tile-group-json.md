@@ -9,8 +9,9 @@ and tileset tools, laid out like the [JSON maps](map-json.md); the game never re
 - **OP2TileSetTools** (the tileset editor) writes a tile group when it imports a graphic into a tileset, and imports
   a tile group's picture back into a tileset's tiles.
 
-Nothing in OP2Formats reads or writes it yet. This document describes the format as those two tools write and read
-it, and the open issue it still has.
+op2-formats reads and writes it (`mapjson::TileGroupJson`, feature `mapjson`), and converts it to and from a `.map`'s
+tile groups. This document describes the format as those two tools write and read it, and the open issue it still
+has.
 
 The measurements below were made with op2-formats on the 89 maps of GOG Outpost 2 with OPU 1.4.1, and on a set of
 218 tile group files exported from those maps' groups, one file per group. What the tools do comes from their
@@ -185,7 +186,9 @@ isn't carried.
 
 ## Sources
 
-- op2-formats `map.rs` (`TileGroup`, the tile group section of a `.map`).
+- op2-formats `map.rs` (`TileGroup`, the tile group section of a `.map`) and `mapjson/tilegroup.rs` (this format);
+  `tests/mapjson.rs` writes `cm01.map`'s `snowroc9` byte for byte as OP2Mapper3 wrote it, and every shipped map with
+  text names back to its bytes with its groups taken from JSON.
 - Leviathan's draft of the tile group JSON format (members, file naming, the per-row layout).
 - op2-formats `mapjson/write.rs` (the PerRowPadded layout the files share).
 - OP2Mapper3's source: `fTileGroups.vb` (folders, reading, preview), `fTileSelect.vb` (export), `Commands.vb`

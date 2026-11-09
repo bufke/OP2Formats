@@ -6,5 +6,6 @@ Possible additions, not planned yet.
   difficulty onto the master variant, `.opm` to map and in-game coordinates, unit names to unit art, and checking a
   mission against its map and tech tree.
 - Support map `.JSON` files: in op2-formats' `mapjson` module (2026-11-06), OP2MapJsonTools' PerRowPadded format, both ways.
-- Support tile group `.JSON` files. The map JSON has no tile groups yet (OP2MapJsonTools' "TO ADD"); a `tileGroups`
+- Tile group `.JSON` files: read and written by `mapjson::TileGroupJson` (2026-11-10), OP2Mapper3's and
+  OP2TileSetTools' format. The map JSON itself has no tile groups yet (OP2MapJsonTools' "TO ADD"); a `tileGroups`
   member would be kept by the `mapjson` module as an unknown member but not turned into the `.map`'s tile groups.

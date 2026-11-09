@@ -5,7 +5,7 @@
 
 use serde_json::{Map as JsonMap, Value};
 
-use super::{MapJson, Range16, TerrainType};
+use super::{MapJson, Range16, TerrainType, TileGroupJson};
 
 const NL: &str = "\r\n";
 
@@ -248,6 +248,25 @@ pub fn per_row_padded(m: &MapJson) -> String {
         o.extra(&t.extra);
     });
     root.extra(&m.extra);
+    root.close();
+    out
+}
+
+/// A tile group file: the six header members in the tools' order, then the rows (padded to 4).
+pub fn tile_group(g: &TileGroupJson) -> String {
+    let mut out = String::new();
+    let mut root = Object::open(&mut out, 0);
+    root.object("header", |o| {
+        o.num("width", g.width());
+        o.num("height", g.height());
+        o.str("tileset", &g.tileset);
+        o.str("name", &g.name);
+        o.str("bmp", &g.bmp);
+        o.str("notes", &g.notes);
+        o.extra(&g.header_extra);
+    });
+    root.rows("tiles", &g.tiles, 4);
+    root.extra(&g.extra);
     root.close();
     out
 }

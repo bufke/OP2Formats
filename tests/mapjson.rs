@@ -162,3 +162,44 @@ fn terrain_types_encode_back_to_their_bytes() {
     let t = TerrainType::decode(&bytes);
     assert_eq!(t.encode(), bytes);
 }
+
+/// Every shipped map's tile groups as tile group JSON: the counts `docs-community/tile-group-json.md` gives, each
+/// group back to the same `.map` group through its text, every map with groups written back to its bytes with them,
+/// and `cm01.map`'s `snowroc9` written exactly as OP2Mapper3 writes it.
+#[test]
+fn tile_groups_of_the_shipped_maps() {
+    let Some(files) = game() else { return };
+    let (mut with_groups, mut text_named, mut groups) = (0, 0, 0);
+    for name in files.map_names() {
+        let (data, _) = files.read(&name).unwrap();
+        let map = Map::parse(&data).unwrap();
+        if map.tile_groups.is_empty() {
+            continue;
+        }
+        with_groups += 1;
+        assert_eq!(tileset_prefix(&map).as_deref(), Some("well00"), "{name}");
+        let json = map_tile_groups(&map).unwrap();
+        assert_eq!(json.len(), 218, "{name}");
+        groups += json.len();
+        let named = map.tile_groups.iter().all(|g| !g.name_bytes.is_empty() && g.name_bytes.iter().all(u8::is_ascii_graphic));
+        for (g, j) in map.tile_groups.iter().zip(&json) {
+            let again = TileGroupJson::parse(&j.to_json()).unwrap();
+            assert_eq!(&again, j, "{name} {}", g.name);
+            let back = again.to_map_group();
+            assert_eq!((back.width, back.height, &back.mapping_indices), (g.width, g.height, &g.mapping_indices));
+            assert!(again.max_mapping_index() <= 2011, "{name} {}: the default table's indices", g.name);
+        }
+        if named {
+            text_named += 1;
+            let mut rebuilt = map.clone();
+            rebuilt.tile_groups = json.iter().map(TileGroupJson::to_map_group).collect();
+            assert!(rebuilt.write() == data, "{name}: written back with groups from JSON");
+        }
+    }
+    assert_eq!((with_groups, text_named, groups), (87, 76, 87 * 218));
+
+    let map = files.read_map("cm01.map").unwrap();
+    let snowroc9 = map_tile_groups(&map).unwrap().into_iter().find(|g| g.name == "snowroc9").unwrap();
+    let expected = "{\r\n  \"header\": {\r\n    \"width\": 2,\r\n    \"height\": 3,\r\n    \"tileset\": \"well00\",\r\n    \"name\": \"snowroc9\",\r\n    \"bmp\": \"\",\r\n    \"notes\": \"\"\r\n  },\r\n  \"tiles\": [\r\n    [ 1934, 1935 ],\r\n    [ 1936, 1937 ],\r\n    [ 1938, 1939 ]\r\n  ]\r\n}";
+    same_text(&snowroc9.to_json(), expected, "snowroc9");
+}
