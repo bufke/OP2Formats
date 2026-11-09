@@ -10,7 +10,12 @@ and these documents link there for the parts they share (tiles, cell types, coor
 | JSON maps | `.json` | OP2MapJsonTools | [map-json.md](map-json.md) | op2-mapjson |
 | Tile group JSON | one tile group per `.json` | proposed, for map tools | [tile-group-json.md](tile-group-json.md) | not read yet |
 | Missions | `.opm` | OP2MissionEditor, OP2DotNetMissionSDK | [opm.md](opm.md) | op2-opm |
-| OP2Mapper2 files | `units.ctl`, `weapons.ctl`, `objects.ctl`, `terrains.ctl`, `.map.dat` | OP2Mapper2 | [op2mapper2.md](op2mapper2.md) | not read |
+| OP2Mapper2 unit table | `units.ctl` | OP2Mapper2 | [op2mapper2-units-ctl.md](op2mapper2-units-ctl.md) | not read |
+| OP2Mapper2 weapon table | `weapons.ctl` | OP2Mapper2 | [op2mapper2-weapons-ctl.md](op2mapper2-weapons-ctl.md) | not read |
+| OP2Mapper2 object table | `objects.ctl` | OP2Mapper2 | [op2mapper2-objects-ctl.md](op2mapper2-objects-ctl.md) | not read |
+| OP2Mapper2 default terrains | `terrains.ctl` | OP2Mapper2 | [op2mapper2-terrains-ctl.md](op2mapper2-terrains-ctl.md) | not read |
+| OP2Mapper2 placements | `<map>.map.dat` | OP2Mapper2 | [op2mapper2-map-dat.md](op2mapper2-map-dat.md) | not read |
+| OP2Mapper2 code templates | `.tpl` | OP2Mapper2 | [op2mapper2-tpl.md](op2mapper2-tpl.md) | not read |
 | OP2Lua missions | `.lua` + `.placement.lua` | OP2Lua | [lua-missions.md](lua-missions.md) | not read |
 
 ## Writing one
