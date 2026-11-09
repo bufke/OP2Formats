@@ -22,3 +22,8 @@ jobs:
       # inno, opu and fetch-opu: the installer readers and the OPU download client.
       - name: Test (all features)
         run: cargo test --workspace --all-features
+      - name: Clippy (no, default and all features)
+        run: |
+          cargo clippy --workspace --all-targets --no-default-features -- -D warnings
+          cargo clippy --workspace --all-targets -- -D warnings
+          cargo clippy --workspace --all-targets --all-features -- -D warnings

@@ -1,3 +1,4 @@
 # The same toolchain op2-rs pins (its tools/rust-toolchain.toml), so the crate builds with what op2-rs uses.
 [toolchain]
 channel = "1.99"
+components = ["clippy"]
