@@ -6,6 +6,19 @@ the version is 0.x, a breaking change raises the minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `strings::GameStrings::load_checked` and `parse_checked`: a table that lacks any id in `0..=LAST_ID` (the ids
+  op2-rs reads) is refused with `strings::Error` (`Missing`, or `Incomplete` with how many are missing and the
+  first), so a caller using the table as its only source of UI text never meets a hole. `GameStrings::text` looks up
+  such a fixed id. `GameStrings::load` is unchanged: it still gives an empty table on a stock install.
+
+### Changed
+
+- Breaking: `install::Check::exe_tables_problem` is now `data_problem`, and with OPU present it also reports a
+  `language.ini` that `load_checked` refuses (or the game's files failing to open), so an install whose strings
+  op2-rs can't use doesn't pass the check.
+
 ## [0.2.0] - 2026-11-10
 
 The community's `.opm` missions, JSON maps and tile group files, and the game's mission DLLs, in the one crate.

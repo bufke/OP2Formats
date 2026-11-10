@@ -1,6 +1,8 @@
 //! The game's UI strings. Outpost2.exe keeps them in its data (a table of string pointers at 0x4E88F8 indexed by
 //! string id); OPU externalises the same table to `OPU/base/language.ini` (`[Game]` section, `id="text"`), which is
-//! what this reads. Without it (a stock install) every lookup misses and callers fall back to code names.
+//! what this reads. [`GameStrings::load`] takes what is there (a stock install has none: every lookup misses);
+//! [`GameStrings::load_checked`] refuses a table that lacks any of the ids op2-rs reads ([`LAST_ID`]), so a caller
+//! that uses it as its one source of UI text never meets a hole.
 //!
 //! Unit and weapon names follow the sheets' row order: vehicle row `r` is string `VEHICLE_NAMES + r`, and likewise
 //! for buildings and weapons (`Lynx` = 718 + 5, `LIGHT_TANK` being row 5 of vehicles.txt).
@@ -16,6 +18,24 @@ pub const BUILDING_NAMES: u32 = 735;
 /// First weapon name (weapons.txt row 0, Laser).
 pub const WEAPON_NAMES: u32 = 819;
 
+/// The highest string id op2-rs reads (fixed ids in the panes, dialogs and messages, and the name ranges above).
+pub const LAST_ID: u32 = 870;
+/// Ids in `0..=LAST_ID` that are not strings (the table has a hole there).
+const NOT_STRINGS: [u32; 1] = [832];
+
+/// Why a game's strings can't be used.
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("OPU's base/language.ini not found: op2-rs needs OPU 1.4.1 (`op2 setup` installs it)")]
+    Missing,
+    #[error(
+        "OPU's base/language.ini lacks {count} of the {total} strings op2-rs reads (first missing: {first}); op2-rs needs \
+         OPU 1.4.1's",
+        total = LAST_ID + 1 - NOT_STRINGS.len() as u32
+    )]
+    Incomplete { count: usize, first: u32 },
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct GameStrings {
     strings: BTreeMap<u32, String>,
@@ -27,6 +47,22 @@ impl GameStrings {
         match files.read("language.ini") {
             Ok((data, _)) => Self::parse(&data.iter().map(|&b| b as char).collect::<String>()),
             Err(_) => Self::default(),
+        }
+    }
+
+    /// The install's `language.ini`, checked to hold every string op2-rs reads.
+    pub fn load_checked(files: &GameFiles) -> Result<Self, Error> {
+        let (data, _) = files.read("language.ini").map_err(|_| Error::Missing)?;
+        Self::parse_checked(&data.iter().map(|&b| b as char).collect::<String>())
+    }
+
+    /// [`parse`](Self::parse) of a whole table, refusing one without every id in `0..=LAST_ID`.
+    pub fn parse_checked(text: &str) -> Result<Self, Error> {
+        let s = Self::parse(text);
+        let missing: Vec<u32> = (0..=LAST_ID).filter(|id| !NOT_STRINGS.contains(id) && !s.strings.contains_key(id)).collect();
+        match missing.first() {
+            Some(&first) => Err(Error::Incomplete { count: missing.len(), first }),
+            None => Ok(s),
         }
     }
 
@@ -58,6 +94,14 @@ impl GameStrings {
 
     pub fn is_empty(&self) -> bool {
         self.strings.is_empty()
+    }
+
+    /// A string by a fixed id, which [`load_checked`](Self::load_checked) has checked is there.
+    pub fn text(&self, id: u32) -> &str {
+        self.get(id).unwrap_or_else(|| {
+            debug_assert!(false, "string {id} is not in the table");
+            ""
+        })
     }
 }
 
@@ -127,6 +171,25 @@ mod tests {
         assert_eq!(s.get(723), Some("Lynx"));
         assert_eq!(s.get(225), Some("Dock is empty.\nTransfers"));
         assert_eq!(s.get(832), None);
+    }
+
+    /// A table is used only whole: a missing id is reported with how many are, and the install's table passes.
+    #[test]
+    fn a_table_without_every_id_is_refused() {
+        let table = |skip: &[u32]| {
+            let mut text = String::from("[Game]\n");
+            for id in (0..=LAST_ID).filter(|id| !NOT_STRINGS.contains(id) && !skip.contains(id)) {
+                text.push_str(&format!("{id}=\"s{id}\"\n"));
+            }
+            text
+        };
+        let all = GameStrings::parse_checked(&table(&[])).expect("a whole table");
+        assert_eq!(all.text(30), "s30");
+        let err = GameStrings::parse_checked(&table(&[30, 400])).unwrap_err();
+        assert!(matches!(err, Error::Incomplete { count: 2, first: 30 }), "{err}");
+        assert!(matches!(GameStrings::parse_checked(""), Err(Error::Incomplete { first: 0, .. })));
+        let Some(files) = crate::testdata::game_files() else { return };
+        GameStrings::load_checked(&files).expect("the install's language.ini holds every string op2-rs reads");
     }
 
     #[test]
