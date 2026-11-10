@@ -44,7 +44,7 @@ OP2Formats/
 ├── docs-community/         # One document per community tool's file format (index: docs-community/README.md)
 ├── rust-toolchain.toml     # Rust 1.99, as op2-rs
 ├── .github/workflows/ci.yml  # Build, test and clippy on Ubuntu, Windows and macOS
-├── README.md, NOTES.md, IDEAS.md, ARCHITECTURE.md
+├── README.md, CHANGELOG.md, NOTES.md, IDEAS.md, ARCHITECTURE.md
 └── LICENSE                 # GPL-3.0-or-later
 ```
 
@@ -164,7 +164,8 @@ The library stores nothing of its own. What it reads:
 ## 6. Deployment & Distribution
 
 - **Rust:** on crates.io as `op2-formats` (0.1.0 published 2026-11-09, 0.2.0 2026-11-10; 0.x, semver), or a path or git dependency on
-  this repository. `cargo publish` packages only the crate (`src/`, `tests/`, `examples/`, `LICENSE`, `README.md`).
+  this repository. `cargo publish` packages only the crate (`src/`, `tests/`, `examples/`, `LICENSE`, `README.md`,
+  `CHANGELOG.md`). Each release is listed in `CHANGELOG.md`.
 - **C/C++:** build with Cargo or CMake and ship `op2formats.dll` / `libop2formats.so` / `libop2formats.dylib` (or
   link the static library) with `include/op2formats.h`.
 - **CI:** GitHub Actions on Ubuntu, Windows and macOS: build and test the workspace with default and all features,

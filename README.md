@@ -15,7 +15,8 @@ The Rust library is [`op2-formats` on crates.io](https://crates.io/crates/op2-fo
 cargo add op2-formats --features opm,mapjson
 ```
 
-C and C++ programs use it through a C interface (below).
+C and C++ programs use it through a C interface (below). What changed in each release:
+[CHANGELOG.md](CHANGELOG.md).
 
 ## Layout
 

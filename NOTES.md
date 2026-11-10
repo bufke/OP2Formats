@@ -39,7 +39,8 @@ State and plan for OP2Formats. Keep it short and current.
 ## Next steps
 
 1. **After 0.2.0**: a note on op2-rs issue 33. Adding bufke as a crates.io owner is the user's call. A release sets
-   the version in both `Cargo.toml`s, `CMakeLists.txt` and the two `find_package` examples.
+   the version in both `Cargo.toml`s, `CMakeLists.txt` and the two `find_package` examples, and moves
+   `CHANGELOG.md`'s Unreleased entries under the new version.
 2. **C interface**: test the GOG installer functions with GOG's offline installer. Try MinGW
    (`x86_64-pc-windows-gnu`, what op2remake's Qt build uses; the CMake branch for it is written but untried) and the
    C/CMake side on Linux and macOS.

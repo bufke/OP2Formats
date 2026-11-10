@@ -9,7 +9,7 @@ rust-version = "1.99"
 keywords = ["outpost2", "gamedev", "file-format", "parser"]
 categories = ["parser-implementations", "game-development"]
 # Only the crate: the C interface, the other crates, the format documents and CMake stay in the repository.
-include = ["/src/**", "/tests/**", "/examples/**", "/LICENSE", "/README.md"]
+include = ["/src/**", "/tests/**", "/examples/**", "/LICENSE", "/README.md", "/CHANGELOG.md"]
 
 [features]
 # Extracting GOG's offline installer (Inno Setup); the shipped programs that offer it turn it on.
