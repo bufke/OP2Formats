@@ -5,7 +5,7 @@ cmake_minimum_required(VERSION 3.19)
 project(op2formats_example LANGUAGES CXX)
 
 if(NOT TARGET OP2Formats::OP2Formats)
-  find_package(OP2Formats 0.1 REQUIRED)
+  find_package(OP2Formats 0.2 REQUIRED)
 endif()
 
 add_executable(op2formats_example main.cpp)

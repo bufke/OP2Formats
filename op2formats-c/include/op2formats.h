@@ -970,7 +970,7 @@ typedef struct Op2fStreamInfo {
 extern "C" {
 #endif // __cplusplus
 
-// The library's version, a static NUL-terminated string such as "0.1.0".
+// The library's version, a static NUL-terminated string such as "0.2.0".
 const char *op2f_version(void);
 
 // Copies the message of this thread's most recent failure (empty if none) into `buf`; returns its full length.

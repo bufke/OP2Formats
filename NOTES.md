@@ -7,8 +7,8 @@ State and plan for OP2Formats. Keep it short and current.
 - **Home.** op2-formats moved out of op2-rs into this repository (op2-rs issue 33). The repo was rebuilt from
   op2-rs's history of `tools/crates/op2-formats` (to op2-rs `69fb43ff`, extracted with `git filter-repo`, the crate
   at the root) merged with this repo's own history; the old repo stays as OP2Formats-Old. Edit op2-formats here.
-- **Releases.** 0.1.0 is on crates.io (2026-11-09, tag `v0.1.0`): the crate as op2-rs had it. The work for 0.2.0 is
-  done and pushed, not yet released (see Next steps).
+- **Releases** (crates.io, tags on GitHub): 0.1.0 (2026-11-09, `v0.1.0`), the crate as op2-rs had it; 0.2.0
+  (2026-11-10, `v0.2.0`), with what 0.2 adds below. The SVN copy follows each release.
 - **Layout.** The root `Cargo.toml` is the `op2-formats` crate and the workspace for `op2formats-c` (not published).
   The crate takes `edition`, `license` and `iced-x86` from the workspace, as it did in op2-rs; `cargo publish` fills
   them in. Features: `inno`, `opu`, `fetch-opu` (installers), `opm` and `mapjson` (the community's JSON formats).
@@ -38,9 +38,8 @@ State and plan for OP2Formats. Keep it short and current.
 
 ## Next steps
 
-1. **Release 0.2.0**: version 0.2.0 in `Cargo.toml` and `CMakeLists.txt` (`project(... VERSION)`), the README's
-   `find_package(OP2Formats 0.1 ...)` example, the SVN copy synced, `cargo publish -p op2-formats` (the user's
-   crates.io login), tag `v0.2.0`, and a note on op2-rs issue 33. Adding bufke as a crates.io owner is the user's call.
+1. **After 0.2.0**: a note on op2-rs issue 33. Adding bufke as a crates.io owner is the user's call. A release sets
+   the version in both `Cargo.toml`s, `CMakeLists.txt` and the two `find_package` examples.
 2. **C interface**: test the GOG installer functions with GOG's offline installer. Try MinGW
    (`x86_64-pc-windows-gnu`, what op2remake's Qt build uses; the CMake branch for it is written but untried) and the
    C/CMake side on Linux and macOS.

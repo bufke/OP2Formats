@@ -211,7 +211,7 @@ pub(crate) unsafe fn free<T>(p: *mut T) {
 
 // ---- Library ----
 
-/// The library's version, a static NUL-terminated string such as "0.1.0".
+/// The library's version, a static NUL-terminated string such as "0.2.0".
 #[unsafe(no_mangle)]
 pub extern "C" fn op2f_version() -> *const c_char {
     concat!(env!("CARGO_PKG_VERSION"), "\0").as_ptr().cast()

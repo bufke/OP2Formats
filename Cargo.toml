@@ -1,6 +1,6 @@
 [package]
 name = "op2-formats"
-version = "0.1.0"
+version = "0.2.0"
 edition.workspace = true
 license.workspace = true
 description = "Outpost 2 file formats library - Read and Write Outpost 2's data files: .vol archives, maps, tilesets, sheets etc"
