@@ -257,6 +257,9 @@ typedef enum Op2fOpmCargo {
   OP2F_OPM_CARGO_WEAPON,
   // Something else: see the `CargoType` text.
   OP2F_OPM_CARGO_OTHER,
+  // A ConVec's structure kit: the structure's name is the `CargoType` text, and `cargo_amount` the kit's weapon (a
+  // `map_id` number, 0 for none).
+  OP2F_OPM_CARGO_KIT,
 } Op2fOpmCargo;
 
 // A text of a unit.
@@ -595,7 +598,8 @@ typedef struct Op2fMissionExport {
 
 // The level details' numbers.
 typedef struct Op2fOpmLevel {
-  // The engine's mission type (-8 colony, -1 last one standing, ... -7 auto demo), or `OP2F_OPM_UNKNOWN`.
+  // The mission type as a mission DLL's `DescBlock` stores it (`OP2F_MISSION_*`: -1 colony ... -8 last one
+  // standing; 1 to 12 a campaign mission, written as its number), or `OP2F_OPM_UNKNOWN`.
   int32_t mission_type;
   int32_t num_players;
   int32_t max_tech_level;

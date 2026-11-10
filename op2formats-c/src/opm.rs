@@ -114,7 +114,8 @@ pub unsafe extern "C" fn op2f_opm_save(opm: *const Op2fOpm, path: *const c_char)
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct Op2fOpmLevel {
-    /// The engine's mission type (-8 colony, -1 last one standing, ... -7 auto demo), or `OP2F_OPM_UNKNOWN`.
+    /// The mission type as a mission DLL's `DescBlock` stores it (`OP2F_MISSION_*`: -1 colony ... -8 last one
+    /// standing; 1 to 12 a campaign mission, written as its number), or `OP2F_OPM_UNKNOWN`.
     pub mission_type: i32,
     pub num_players: i32,
     pub max_tech_level: i32,
@@ -131,7 +132,7 @@ pub unsafe extern "C" fn op2f_opm_level(opm: *const Op2fOpm, out: *mut Op2fOpmLe
         let m = mission(opm)?;
         let d = &m.level_details;
         let level = Op2fOpmLevel {
-            mission_type: number(d.mission_type.value()),
+            mission_type: number(d.mission_type.number()),
             num_players: d.num_players,
             max_tech_level: d.max_tech_level,
             unit_only_mission: d.unit_only_mission,
@@ -403,6 +404,9 @@ pub enum Op2fOpmCargo {
     Weapon,
     /// Something else: see the `CargoType` text.
     Other,
+    /// A ConVec's structure kit: the structure's name is the `CargoType` text, and `cargo_amount` the kit's weapon (a
+    /// `map_id` number, 0 for none).
+    Kit,
 }
 
 /// A placed unit.
@@ -455,6 +459,7 @@ pub unsafe extern "C" fn op2f_opm_unit(
             opm::Cargo::GeneBank => (Op2fOpmCargo::GeneBank, 0),
             opm::Cargo::Weapon(_) => (Op2fOpmCargo::Weapon, 0),
             opm::Cargo::Other(_) => (Op2fOpmCargo::Other, 0),
+            opm::Cargo::Kit { .. } => (Op2fOpmCargo::Kit, 0),
         };
         let info = Op2fOpmUnit {
             id: u.id,

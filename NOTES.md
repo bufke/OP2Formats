@@ -67,8 +67,10 @@ State and plan for OP2Formats. Newest first; keep it short and current.
    the map and tech tree, setters in the C interface.
 6. **0.2**: mission DLLs are read (`mission`, 2026-11-10: description, exports, checksum; in
    the C interface as `op2f_mission_*`), and tile group JSON (`mapjson::TileGroupJson`,
-   2026-11-10; `op2f_tilegroup_*`, `op2f_map_add_tile_group`; 345 functions). Still to do:
-   the `opm` model's known mistakes (MissionType values, BotType, Region ID). Not planned: saved games and
+   2026-11-10; `op2f_tilegroup_*`, `op2f_map_add_tile_group`; 345 functions), and the `opm`
+   model corrected to the SDK and the game (2026-11-10: MissionType values, MoraleLevel
+   numbers, all ten BotTypes, no White or Common/Rare markers, `Empty` trucks, cargo numbers
+   by their low 4 bits, ConVec kits, Region `ID`). Next: the 0.2.0 release. Not planned: saved games and
    OP2Mapper2's files (the user's call: OP2Mapper2 is old and unused).
 7. **Releases**: op2-rs needs reader fixes released within days. bufke to be added as a
    crates.io owner. The repo stays on leviathan400 for now (OutpostUniverse maybe later).

@@ -308,6 +308,8 @@ pub struct Disaster {
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "PascalCase", default)]
 pub struct Region {
+    #[serde(rename = "ID")]
+    pub id: i32,
     pub name: String,
     pub rect: DataRect,
     #[serde(flatten)]

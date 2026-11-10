@@ -64,20 +64,29 @@ macro_rules! opm_enum {
 }
 
 opm_enum! {
-    /// The game mode (`LevelDetails.MissionType`); the values are the engine's.
+    /// The game mode (`LevelDetails.MissionType`); the values are what the mission DLL's `DescBlock` stores. A
+    /// campaign mission writes its number instead (`"10"`), read as `Other`; [`MissionType::number`] gives it.
     MissionType {
-        Colony = Some(-8),
-        MultiLastOneStanding = Some(-1),
-        MultiMidas = Some(-2),
-        MultiResourceRace = Some(-3),
-        MultiSpaceRace = Some(-4),
-        MultiLandRush = Some(-5),
-        Tutorial = Some(-6),
-        AutoDemo = Some(-7),
+        Colony = Some(-1),
+        AutoDemo = Some(-2),
+        Tutorial = Some(-3),
+        MultiLandRush = Some(-4),
+        MultiSpaceRace = Some(-5),
+        MultiResourceRace = Some(-6),
+        MultiMidas = Some(-7),
+        MultiLastOneStanding = Some(-8),
     }
 }
 
 impl MissionType {
+    /// The `DescBlock` value: a named type's, or a campaign mission's number (1 to 12) written as text.
+    pub fn number(&self) -> Option<i32> {
+        match self {
+            Self::Other(s) => s.trim().parse().ok().filter(|n| (1..=12).contains(n)),
+            named => named.value(),
+        }
+    }
+
     /// The prefix OP2MissionEditor gives the file name, e.g. "ml2" for a 2-player Last One Standing, "c" for a
     /// colony game.
     pub fn file_prefix(&self, players: i32) -> String {
@@ -95,7 +104,8 @@ impl MissionType {
 }
 
 opm_enum! {
-    /// A player's colour; the values are the engine's colour numbers.
+    /// A player's colour; the values are the engine's colour numbers (the SDK's `PlayerColor`). There is no colour
+    /// 7: OP2OpmTools' `White` reads as `Other`, and the SDK passes it to the game as 0 (blue).
     Color {
         Blue = Some(0),
         Red = Some(1),
@@ -104,27 +114,35 @@ opm_enum! {
         Cyan = Some(4),
         Magenta = Some(5),
         Black = Some(6),
-        White = Some(7),
     }
 }
 
 opm_enum! {
-    /// An AI player's behaviour preset. `None` for humans.
+    /// An AI player's behaviour preset (the SDK's `BotType`, in its order; the SDK's bot uses it, the game never
+    /// sees it). `None` for humans; a new mission gives the other players `Balanced`.
     BotType {
         None = None,
-        Balanced = None,
+        PopulationGrowth = None,
         LaunchStarship = None,
+        EconomicGrowth = None,
+        Passive = None,
+        Defender = None,
+        Balanced = None,
+        Aggressive = None,
+        Harassment = None,
+        Wreckless = None,
     }
 }
 
 opm_enum! {
-    /// A starting morale level.
+    /// A starting morale level, as the SDK numbers it. An absent one is `Excellent` (the SDK's 0); a new mission in the
+    /// editor starts at `Good`.
     MoraleLevel {
-        Good = None,
-        Excellent = None,
-        Fair = None,
-        Poor = None,
-        Terrible = None,
+        Excellent = Some(0),
+        Good = Some(1),
+        Fair = Some(2),
+        Poor = Some(3),
+        Terrible = Some(4),
     }
 }
 
@@ -181,22 +199,21 @@ opm_enum! {
 }
 
 opm_enum! {
-    /// A map marker's graphic.
+    /// A map marker's graphic: the three the game's `TethysGame::PlaceMarker` (0x478BB0) knows. Any other name
+    /// (OP2OpmTools' `Common` and `Rare`) reads as `Other`; the SDK passes it to the game as 0 (circle).
     MarkerType {
-        Circle = None,
-        Beaker = None,
-        DNA = None,
-        Common = None,
-        Rare = None,
+        Circle = Some(0),
+        DNA = Some(1),
+        Beaker = Some(2),
     }
 }
 
 opm_enum! {
     /// What a cargo truck carries (`Unit.CargoType` on a `CargoTruck`): the SDK's `TruckCargo` names. Note `Garbage`
-    /// is wreckage and `Spaceport` a starship module (its id in `CargoAmount`); a gene bank has no name and comes as
-    /// the number 90 (see [`super::Cargo`]).
+    /// is wreckage and `Spaceport` a starship module (its id in `CargoAmount`); a gene bank, cargo 10, has no name
+    /// and comes as a number (see [`super::Cargo`]).
     TruckCargo {
-        None = Some(0),
+        Empty = Some(0),
         Food = Some(1),
         CommonOre = Some(2),
         RareOre = Some(3),

@@ -203,8 +203,8 @@ An absent `Health` is 1 and an absent `Lights` true: the SDK's reader sets them 
 cargo as one 16-bit word, the amount times 16 plus the cargo's low 4 bits (for wreckage, 9, an amount above 8000
 loses 8000 first). 90 is 0x5A, so the truck carries cargo 10, which the game names "Gene Bank" (the cargo name
 routine 0x406310 knows 0-10; its case 10 is the string at 0x4E750C). So `"10"` gives the same truck, and any
-number whose low 4 bits are 10 does. op2-formats reads `90` and `10` as a gene bank; no file has `10`. The amount keeps
-12 bits (0-4095).
+number whose low 4 bits are 10 does. op2-formats reads any number by its low 4 bits the same way, so `90` and `10` are
+a gene bank; no file has `10`. The amount keeps 12 bits (0-4095).
 
 Starship module numbers (`map_id`): 88 EDWARD Satellite, 89 Solar Satellite, 90 Ion Drive, 91 Fusion Drive, 92
 Command Module, 93 Fueling Systems, 94 Habitat Ring, 95 Sensor Package, 96 Skydock, 97 Stasis Systems, 98 Orbital
@@ -303,7 +303,7 @@ The SDK's model declares `TechID` a string, but every file has a number there; o
 
 | Member | Type | Contents |
 |---|---|---|
-| `ID` | integer | in the SDK's model; op2-formats keeps it as an unknown member |
+| `ID` | integer | in the SDK's model |
 | `Name` | string | the name triggers use |
 | `Rect` | [rect](#datarect) | |
 
@@ -407,8 +407,8 @@ clockwise from east, in the SDK's spelling. `opu_12.opm` spells three of them `S
 `Circle` 0, `DNA` 1, `Beaker` 2 (the SDK's). They are the only types the game knows: `TethysGame::PlaceMarker`
 (0x478BB0) turns 0, 1 and 2 into the animations with game ids 1865, 2169 and 2170 (`op2_art.prt` records 1764,
 2068 and 2069; see [sprites.md](../docs/sprites.md#game-ids)) and has no value for any other type (it then uses
-whatever an unset local variable holds). op2-formats also knows `Common` and `Rare`, from the editor's marker art; no
-file has them, the SDK reads them as `Circle`, and they shouldn't be written.
+whatever an unset local variable holds). OP2OpmTools' table also lists `Common` and `Rare`; no file has them, the SDK
+reads them as `Circle`, and they shouldn't be written (op2-formats keeps them as unknown names).
 
 ### `TruckCargo`
 

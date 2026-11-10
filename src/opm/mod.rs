@@ -141,7 +141,7 @@ fn upgrade_legacy(v: &mut Value) {
 /// What a unit's `CargoType` and `CargoAmount` mean together.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Cargo {
-    /// "None", or empty.
+    /// "None", "Empty", or empty.
     None,
     /// Ore, metal, food or rubble in a cargo truck (`TruckCargo` 1-7), `amount` of it.
     Truck { cargo: TruckCargo, amount: i32 },
@@ -149,28 +149,45 @@ pub enum Cargo {
     StarshipModule(i32),
     /// Wreckage (`CargoType` "Garbage", which the SDK's `TruckCargo` calls wreckage).
     Wreckage,
-    /// A gene bank: the SDK's `TruckCargo` has no name for it, so the editor writes the number 90 (or 10).
+    /// A gene bank, truck cargo 10, which the SDK's `TruckCargo` has no name for: the editor writes the number 90. The
+    /// game keeps a truck cargo's low 4 bits (`Unit::SetTruckCargo`, 0x406CD0), so 90 and 10 load the same truck.
     GeneBank,
+    /// A ConVec's structure kit: the structure's `map_id` name (`CommandCenter`, `Tokamak`, ...) and `CargoAmount`,
+    /// which the SDK passes to the game as the kit's weapon (a `map_id` number, 0 for none).
+    Kit { structure: String, weapon: i32 },
     /// A combat unit's weapon.
     Weapon(Weapon),
     /// Anything else, as written.
     Other(String),
 }
 
+/// `TruckCargo` names by number, 0 to 9.
+const TRUCK_CARGO: [&str; 10] =
+    ["Empty", "Food", "CommonOre", "RareOre", "CommonMetal", "RareMetal", "CommonRubble", "RareRubble", "Spaceport", "Garbage"];
+
 impl Unit {
-    /// Decodes `cargo_type` with `cargo_amount`.
+    /// Decodes `cargo_type` with `cargo_amount`. A ConVec's is a structure kit; a number (the SDK reads one as the
+    /// cargo's value) is a truck cargo, decoded from its low 4 bits as the game stores it.
     pub fn cargo(&self) -> Cargo {
         let t = self.cargo_type.trim();
         if t.is_empty() || t.eq_ignore_ascii_case("None") {
             return Cargo::None;
         }
-        if t == "90" || t == "10" {
-            return Cargo::GeneBank;
+        if self.type_id.eq_ignore_ascii_case("ConVec") {
+            return Cargo::Kit { structure: t.to_string(), weapon: self.cargo_amount };
         }
-        match TruckCargo::from_name(t) {
+        let truck = match t.parse::<i32>() {
+            Ok(n) => match (n & 0xF) as usize {
+                10 => return Cargo::GeneBank,
+                low if low < TRUCK_CARGO.len() => TruckCargo::from_name(TRUCK_CARGO[low]),
+                _ => return Cargo::Other(t.to_string()),
+            },
+            Err(_) => TruckCargo::from_name(t),
+        };
+        match truck {
             TruckCargo::Spaceport => return Cargo::StarshipModule(self.cargo_amount),
             TruckCargo::Garbage => return Cargo::Wreckage,
-            TruckCargo::None => return Cargo::None,
+            TruckCargo::Empty => return Cargo::None,
             TruckCargo::Other(_) => {}
             cargo => return Cargo::Truck { cargo, amount: self.cargo_amount },
         }

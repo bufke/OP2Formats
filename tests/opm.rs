@@ -193,3 +193,58 @@ fn every_opm_in_op2_opm_dir() {
     assert!(seen > 0, "no .opm files in {}", dir.to_string_lossy());
     eprintln!("{seen} files read and written back");
 }
+
+#[test]
+fn enum_values_are_the_sdk_s_and_the_game_s() {
+    // MissionType: what DescBlock stores; a campaign mission writes its number.
+    let numbers: Vec<i32> = ["Colony", "AutoDemo", "Tutorial", "MultiLandRush", "MultiSpaceRace", "MultiResourceRace", "MultiMidas", "MultiLastOneStanding"]
+        .iter()
+        .map(|n| MissionType::from_name(n).number().unwrap())
+        .collect();
+    assert_eq!(numbers, [-1, -2, -3, -4, -5, -6, -7, -8]);
+    assert_eq!(MissionType::Other("10".into()).number(), Some(10), "a campaign mission");
+    assert_eq!(MissionType::Other("13".into()).number(), None);
+
+    // No colour 7, no Common or Rare marker: read as unknown names, kept.
+    assert_eq!(Color::from_name("White"), Color::Other("White".into()));
+    assert_eq!(Color::Black.value(), Some(6));
+    assert_eq!([MarkerType::Circle, MarkerType::DNA, MarkerType::Beaker].map(|m| m.value()), [Some(0), Some(1), Some(2)]);
+    assert_eq!(MarkerType::from_name("Rare"), MarkerType::Other("Rare".into()));
+
+    // The SDK's ten bot types, and morale numbered from Excellent; an absent morale is Excellent.
+    for name in ["None", "PopulationGrowth", "LaunchStarship", "EconomicGrowth", "Passive", "Defender", "Balanced", "Aggressive", "Harassment", "Wreckless"] {
+        assert_eq!(BotType::from_name(name).name(), name);
+    }
+    assert_eq!([MoraleLevel::Excellent, MoraleLevel::Good, MoraleLevel::Terrible].map(|m| m.value()), [Some(0), Some(1), Some(4)]);
+    let m = Mission::parse(r#"{ "MasterVariant": { "Players": [ { "ID": 0, "Resources": {} } ] } }"#).unwrap();
+    assert_eq!(m.master_variant.players[0].resources.morale_level, MoraleLevel::Excellent);
+}
+
+#[test]
+fn cargo_decodes_as_the_game_loads_it() {
+    let unit = |type_id: &str, cargo: &str, amount: i32| {
+        let json = format!(r#"{{ "TypeID": "{type_id}", "CargoType": "{cargo}", "CargoAmount": {amount} }}"#);
+        serde_json::from_str::<Unit>(&json).unwrap().cargo()
+    };
+    assert_eq!(unit("CargoTruck", "Empty", 0), Cargo::None, "opu_12's empty truck");
+    assert_eq!(unit("CargoTruck", "Food", 500), Cargo::Truck { cargo: TruckCargo::Food, amount: 500 });
+    // A number keeps its low 4 bits, as Unit::SetTruckCargo stores it: 90 (the editor's) and 10 are a gene bank.
+    for gene_bank in ["90", "10", "26"] {
+        assert_eq!(unit("CargoTruck", gene_bank, 5), Cargo::GeneBank, "{gene_bank}");
+    }
+    assert_eq!(unit("CargoTruck", "3", 7), Cargo::Truck { cargo: TruckCargo::RareOre, amount: 7 });
+    assert_eq!(unit("CargoTruck", "9", 0), Cargo::Wreckage);
+    assert_eq!(unit("CargoTruck", "11", 0), Cargo::Other("11".into()));
+    assert_eq!(unit("ConVec", "Tokamak", 0), Cargo::Kit { structure: "Tokamak".into(), weapon: 0 });
+    assert_eq!(unit("ConVec", "GuardPost", 37), Cargo::Kit { structure: "GuardPost".into(), weapon: 37 });
+    assert_eq!(unit("ConVec", "None", 0), Cargo::None);
+    assert_eq!(unit("Lynx", "Laser", 0), Cargo::Weapon(Weapon::Laser));
+}
+
+#[test]
+fn regions_keep_their_id() {
+    let m = Mission::parse(r#"{ "Regions": [ { "ID": 4, "Name": "base", "Rect": { "MinX": 1, "MinY": 2, "MaxX": 3, "MaxY": 4 } } ] }"#).unwrap();
+    assert_eq!((m.regions[0].id, m.regions[0].name.as_str()), (4, "base"));
+    assert!(m.regions[0].extra.is_empty());
+    assert!(m.to_opm().contains("\"ID\":4"), "written back");
+}

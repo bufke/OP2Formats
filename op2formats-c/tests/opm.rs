@@ -22,7 +22,7 @@ fn fixture(name: &str) -> String {
 fn reads_a_mission() {
     let opm = out(|o| unsafe { op2f_opm_open(c(&fixture("opu_12.opm")).as_ptr(), o) });
     let level = out(|o| unsafe { op2f_opm_level(opm, o) });
-    assert_eq!((level.mission_type, level.num_players, level.max_tech_level, level.variant_count), (-8, 2, 12, 1));
+    assert_eq!((level.mission_type, level.num_players, level.max_tech_level, level.variant_count), (OP2F_MISSION_COLONY, 2, 12, 1));
     assert_eq!(string(|b, c, l| unsafe { op2f_opm_text(opm, Op2fOpmText::MapName, b, c, l) }), "opu_12.map");
     assert_eq!(string(|b, c, l| unsafe { op2f_opm_text(opm, Op2fOpmText::FilePrefix, b, c, l) }), "c");
     assert_eq!(unsafe { op2f_opm_variant_name(opm, 0, null_mut(), 0, null_mut()) }, Op2fStatus::NotFound);

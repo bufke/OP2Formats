@@ -33,7 +33,13 @@ Any known writer's file reads:
 - Comments and trailing commas, which Newtonsoft.Json (the SDK tools' reader) accepts.
 
 `Unit::cargo` decodes `CargoType` with `CargoAmount`: truck cargo, a starship module (`Spaceport`, the module id in
-`CargoAmount`), wreckage (`Garbage`), a gene bank (written as the number `90`), or a weapon.
+`CargoAmount`), wreckage (`Garbage`), a gene bank (written as the number `90`; a number is read by its low 4 bits,
+as the game stores truck cargo), a ConVec's structure kit (with `CargoAmount` as its weapon), or a weapon.
+
+Enum values follow the SDK and the game: `MissionType` is the `DescBlock` value (`Colony` −1 to
+`MultiLastOneStanding` −8; `number()` also reads a campaign mission's `"10"`), `MoraleLevel` counts from `Excellent`
+0, and `BotType` has the SDK's ten presets. Names the SDK doesn't define (`White`, the `Common` and `Rare` markers) read
+as `Other` and are written back as they were.
 
 ## Writing
 
