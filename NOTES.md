@@ -8,7 +8,8 @@ State and plan for OP2Formats. Keep it short and current.
   op2-rs's history of `tools/crates/op2-formats` (to op2-rs `69fb43ff`, extracted with `git filter-repo`, the crate
   at the root) merged with this repo's own history; the old repo stays as OP2Formats-Old. Edit op2-formats here.
 - **Releases** (crates.io, tags on GitHub): 0.1.0 (2026-11-09, `v0.1.0`), the crate as op2-rs had it; 0.2.0
-  (2026-11-10, `v0.2.0`), with what 0.2 adds below. The SVN copy follows each release.
+  (2026-11-10, `v0.2.0`), with what 0.2 adds below; 0.3.0 (2026-11-10, `v0.3.0`), bufke's string-table check
+  (`GameStrings::load_checked`; the install check's `data_problem`). The SVN copy follows each release.
 - **Layout.** The root `Cargo.toml` is the `op2-formats` crate and the workspace for `op2formats-c` (not published).
   The crate takes `edition`, `license` and `iced-x86` from the workspace, as it did in op2-rs; `cargo publish` fills
   them in. Features: `inno`, `opu`, `fetch-opu` (installers), `opm` and `mapjson` (the community's JSON formats).
@@ -38,7 +39,7 @@ State and plan for OP2Formats. Keep it short and current.
 
 ## Next steps
 
-1. **After 0.2.0**: a note on op2-rs issue 33. Adding bufke as a crates.io owner is the user's call. A release sets
+1. **After 0.3.0**: a note on op2-rs issue 33. Adding bufke as a crates.io owner is the user's call. A release sets
    the version in both `Cargo.toml`s, `CMakeLists.txt` and the two `find_package` examples, and moves
    `CHANGELOG.md`'s Unreleased entries under the new version.
 2. **C interface**: test the GOG installer functions with GOG's offline installer. Try MinGW

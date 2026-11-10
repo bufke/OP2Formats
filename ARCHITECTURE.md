@@ -163,7 +163,7 @@ The library stores nothing of its own. What it reads:
 
 ## 6. Deployment & Distribution
 
-- **Rust:** on crates.io as `op2-formats` (0.1.0 published 2026-11-09, 0.2.0 2026-11-10; 0.x, semver), or a path or git dependency on
+- **Rust:** on crates.io as `op2-formats` (0.1.0 published 2026-11-09, 0.2.0 and 0.3.0 2026-11-10; 0.x, semver), or a path or git dependency on
   this repository. `cargo publish` packages only the crate (`src/`, `tests/`, `examples/`, `LICENSE`, `README.md`,
   `CHANGELOG.md`). Each release is listed in `CHANGELOG.md`.
 - **C/C++:** build with Cargo or CMake and ship `op2formats.dll` / `libop2formats.so` / `libop2formats.dylib` (or

@@ -15,7 +15,7 @@
 # Needs Cargo (rustup's, from https://rustup.rs); rust-toolchain.toml picks the Rust version. See README.md.
 
 cmake_minimum_required(VERSION 3.19)
-project(OP2Formats VERSION 0.2.0 LANGUAGES C)
+project(OP2Formats VERSION 0.3.0 LANGUAGES C)
 
 option(OP2FORMATS_LINK_STATIC "Link OP2Formats::OP2Formats statically" OFF)
 option(OP2FORMATS_BUILD_EXAMPLES "Build the C++ example" ${PROJECT_IS_TOP_LEVEL})

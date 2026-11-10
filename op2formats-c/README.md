@@ -64,7 +64,7 @@ cmake --install build --prefix C:/libs/OP2Formats
 ```
 
 ```cmake
-find_package(OP2Formats 0.2 REQUIRED)   # with CMAKE_PREFIX_PATH including C:/libs/OP2Formats
+find_package(OP2Formats 0.3 REQUIRED)   # with CMAKE_PREFIX_PATH including C:/libs/OP2Formats
 target_link_libraries(app PRIVATE OP2Formats::OP2Formats)
 op2formats_copy_runtime(app)
 ```

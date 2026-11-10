@@ -6,6 +6,10 @@ the version is 0.x, a breaking change raises the minor version.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-10
+
+op2-rs's strict string-table check, from bufke (pull request 1). One breaking change, in the install check.
+
 ### Added
 
 - `strings::GameStrings::load_checked` and `parse_checked`: a table that lacks any id in `0..=LAST_ID` (the ids
@@ -82,6 +86,7 @@ of Outpost 2, as op2-rs had it at commit `69fb43ff`, with its full history. The 
   downloading it (feature `fetch-opu`).
 - Package metadata for crates.io (repository, description, `rust-version` 1.99).
 
-[Unreleased]: https://github.com/leviathan400/OP2Formats/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/leviathan400/OP2Formats/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/leviathan400/OP2Formats/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/leviathan400/OP2Formats/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/leviathan400/OP2Formats/releases/tag/v0.1.0
