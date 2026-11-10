@@ -76,5 +76,7 @@ converts to the same `.map` bytes; without a base, to the same map but for what 
 `OP2_MAPJSON` naming a file OP2MapJsonTools wrote, or a folder of them, each writes back byte for byte; when its
 `map` is a game map (and `OP2_DIR` is set), our own conversion of that map is the file byte for byte, and the file
 converts back to the map's bytes. Checked with `map1.json` (a 128x128 custom map) and `eden03.json` (the campaign
-map, OPU's copy). Plus the error cases and the terrain type encoding. The sample files aren't committed: one is a
+map, OPU's copy). Plus the error cases and the terrain type encoding. For tile groups: every shipped map's groups
+convert and read back, the maps whose group names are text write back to their bytes with groups taken from JSON, and
+`cm01.map`'s `snowroc9` is written byte for byte as OP2Mapper3 wrote it. The sample files aren't committed: one is a
 conversion of a game map.

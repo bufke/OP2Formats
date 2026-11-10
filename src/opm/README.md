@@ -52,10 +52,11 @@ for `Southeast`).
 ## Tests
 
 `tests/data/opm` holds two missions saved with OP2MissionEditor (`opu_12.opm`, `cmyTut.opm`). `tests/opm.rs` checks
-that they read and write back the same JSON. It also covers every reading rule above on hand-written text. With
+that they read and write back the same JSON. It also covers every reading rule above on hand-written text, the
+SDK's enum values and the cargo decoding. With
 `OP2_OPM_DIR` set to a folder of `.opm` files, it reads and writes back every one. That passed with 11 files in four
 layouts: OP2MissionEditor's, OP2DotNetMissionSDK's test missions (including the older layout and a trailing comma),
-OP2 Remake's missions, and two files with each member on one line.
+missions from another project, and two files with each member on one line.
 
 `cargo run --features opm --example opm_rewrite -- in.opm out.opm` reads a file and writes it in the editor's layout.
 
