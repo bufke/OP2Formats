@@ -6,6 +6,18 @@ the version is 0.x, a breaking change raises the minor version.
 
 ## [Unreleased]
 
+### Added
+
+- `source_tree`: the checkout a development build runs from (the folder above the Cargo workspace whose `target`
+  folder holds the running program), found at run time.
+- `testdata::oracle_runs_dir` honours `$OP2_RUNS_DIR`.
+
+### Fixed
+
+- `source_tree_game_dir` and `testdata::oracle_runs_dir` work when the crate comes from crates.io. They located the
+  checkout from the crate's own build path (`CARGO_MANIFEST_DIR`), which for a published crate is in Cargo's registry,
+  so a dependent project's tests and tools silently lost the source tree's game folder and recorded runs.
+
 ## [0.3.0] - 2026-11-10
 
 op2-rs's strict string-table check, from bufke (pull request 1). One breaking change, in the install check.

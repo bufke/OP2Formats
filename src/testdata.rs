@@ -5,7 +5,7 @@
 //! one can still require the game data. Replaying a run needs the install too, so `OP2_REQUIRE_RUNS=1` also fails a
 //! missing install.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 use crate::GameFiles;
 
@@ -27,10 +27,14 @@ pub fn game_files() -> Option<GameFiles> {
     game_dir().map(|dir| GameFiles::open(&dir).expect("opening game folder"))
 }
 
-/// The harness's recorded runs of the original game, `harness/oracle/runs` in this checkout (not committed; a
-/// worktree can symlink the main checkout's). A test missing one reports it with [`skip_run`].
+/// The harness's recorded runs of the original game: `$OP2_RUNS_DIR`, else `harness/oracle/runs` in the
+/// [`source_tree`](crate::source_tree) (not committed; a worktree can symlink the main checkout's). A test missing
+/// one reports it with [`skip_run`].
 pub fn oracle_runs_dir() -> PathBuf {
-    Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../harness/oracle/runs")
+    if let Some(d) = std::env::var_os("OP2_RUNS_DIR").filter(|v| !v.is_empty()) {
+        return d.into();
+    }
+    crate::source_tree().unwrap_or_default().join("harness/oracle/runs")
 }
 
 /// Reports that a test is skipping its real-data checks, or panics when `OP2_REQUIRE_DATA` is set.

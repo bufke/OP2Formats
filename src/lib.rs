@@ -75,18 +75,22 @@ pub fn default_game_dir() -> std::path::PathBuf {
         .clone()
 }
 
-/// This repository's Wine prefix install (`prefix/drive_c/GOG Games/Outpost 2`), when the running program was built
-/// in and runs from this source tree (`tools/target/...`: tests, the harness, `cargo run`) and the folder exists.
-/// A release binary run anywhere else never looks there.
+/// The checkout a development build runs from: the folder above the Cargo workspace whose `target` folder holds the
+/// running program (`tools/target/...` in op2-rs: tests, the harness, `cargo run`). Found at run time from the
+/// program's own path, so it works the same when this crate comes from crates.io. A program run from anywhere else
+/// (an installed release) has none.
+pub fn source_tree() -> Option<std::path::PathBuf> {
+    let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
+    let target = exe.ancestors().skip(1).find(|d| d.file_name().is_some_and(|n| n == "target"))?;
+    let workspace = target.parent().filter(|w| w.join("Cargo.toml").is_file())?;
+    Some(workspace.parent()?.to_path_buf())
+}
+
+/// The source tree's Wine prefix install (`prefix/drive_c/GOG Games/Outpost 2` in the [`source_tree`]), when the
+/// running program is a development build and the folder exists. A release binary run anywhere else never looks there.
 pub fn source_tree_game_dir() -> Option<std::path::PathBuf> {
     use std::path::PathBuf;
-    let tools = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let target = tools.join("target").canonicalize().ok()?;
-    let exe = std::env::current_exe().ok()?.canonicalize().ok()?;
-    if !exe.starts_with(&target) {
-        return None;
-    }
-    let dir = tools.join("../prefix/drive_c/GOG Games/Outpost 2").canonicalize().ok().filter(|d| d.is_dir())?;
+    let dir = source_tree()?.join("prefix/drive_c/GOG Games/Outpost 2").canonicalize().ok().filter(|d| d.is_dir())?;
     // Windows's canonical form is a `\\?\` path; the plain one reads better in messages and works the same here.
     let plain = dir.to_str().and_then(|s| s.strip_prefix(r"\\?\")).filter(|s| !s.starts_with("UNC")).map(PathBuf::from);
     Some(plain.unwrap_or(dir))
